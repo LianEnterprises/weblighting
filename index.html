@@ -570,7 +570,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 2px;
+    gap: 1px;
     cursor: pointer;
     flex-shrink: 0;
   }
@@ -615,6 +615,25 @@
   }
 
   .cue-item.active .cue-num { color: var(--etc-orange); }
+
+  .cue-fade-input {
+    width: 36px;
+    background: transparent;
+    border: none;
+    border-top: 1px solid var(--etc-border);
+    color: #55BBFF;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-align: center;
+    padding: 2px 0;
+    outline: none;
+    -moz-appearance: textfield;
+  }
+  .cue-fade-input::-webkit-outer-spin-button,
+  .cue-fade-input::-webkit-inner-spin-button { -webkit-appearance: none; }
+  .cue-fade-input:focus { border-color: #55BBFF; color: #fff; }
 
   .cue-arrow {
     width: 14px;
@@ -718,7 +737,23 @@
     color: #FFD060;
   }
 
-  /* Scrollbar */
+  .prop-num-input {
+    width: 42px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--etc-border);
+    color: var(--etc-text);
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    text-align: center;
+    padding: 2px 3px;
+    outline: none;
+    -moz-appearance: textfield;
+    flex-shrink: 0;
+  }
+  .prop-num-input::-webkit-outer-spin-button,
+  .prop-num-input::-webkit-inner-spin-button { -webkit-appearance: none; }
+  .prop-num-input:focus { border-color: var(--etc-orange); color: #fff; }
   ::-webkit-scrollbar { width: 4px; height: 4px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--etc-border); border-radius: 2px; }
@@ -737,6 +772,7 @@
       <button class="btn" onclick="clearAll()">Clear Stage</button>
       <button class="btn" onclick="resetCamera()">Reset View</button>
       <button class="btn" id="stage-toggle-btn" onclick="toggleStage()">🏛 Hide Stage</button>
+      <button class="btn" id="bg-toggle-btn" onclick="toggleBackground()">☀ White BG</button>
       <button class="btn primary" onclick="blackout()">Blackout</button>
     </div>
   </div>
@@ -915,6 +951,11 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ReinhardToneMapping;
 renderer.toneMappingExposure = 1.2;
+
+// Declared early so all functions can reference it safely
+let whiteBG = false;
+const BG_DARK  = new THREE.Color(0x050508);
+const BG_WHITE = new THREE.Color(0xF4F2EC);
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x050508);
@@ -1108,12 +1149,92 @@ function toggleStage() {
   stageVisible = !stageVisible;
   allStageMeshes.forEach(({ mesh }) => { mesh.visible = stageVisible; });
   darkOnlyMeshes.forEach(m => { m.visible = stageVisible && !whiteBG; });
-  gridDark.visible  = stageVisible && !whiteBG;
-  gridLight.visible = stageVisible && whiteBG;
-  edgeLines.visible = stageVisible;
   const btn = document.getElementById('stage-toggle-btn');
   btn.textContent = stageVisible ? '🏛 Hide Stage' : '🏛 Show Stage';
   btn.style.opacity = stageVisible ? '' : '0.5';
+}
+
+// ======= BACKGROUND TOGGLE =======
+function applyBackground() {
+  if (whiteBG) {
+    scene.background = BG_WHITE;
+    scene.fog = new THREE.Fog(0xF4F2EC, 50, 120);
+    ambient.intensity = 2.2;
+    ambient.color.set(0xffffff);
+    fillLight.intensity = 0.8;
+    renderer.toneMappingExposure = 1.0;
+  } else {
+    scene.background = BG_DARK;
+    scene.fog = new THREE.Fog(0x050508, 30, 80);
+    ambient.intensity = 0.4;
+    ambient.color.set(0x111122);
+    fillLight.intensity = 0.2;
+    renderer.toneMappingExposure = 1.2;
+  }
+}
+
+const fixtureMatCache = new Map();
+
+function desaturateFixtures() {
+  fixtures.forEach(f => {
+    if (f.beamGroup) f.beamGroup.visible = false;
+    if (f.beamGroup?._poolMesh) f.beamGroup._poolMesh.visible = false;
+    if (f.hazerCloud) f.hazerCloud.visible = false;
+    f.group.traverse(child => {
+      if (!child.isMesh || !child.material) return;
+      const mat = child.material;
+      if (!fixtureMatCache.has(child.uuid)) {
+        fixtureMatCache.set(child.uuid, {
+          color: mat.color.clone(),
+          emissive: mat.emissive ? mat.emissive.clone() : new THREE.Color(0),
+          emissiveIntensity: mat.emissiveIntensity ?? 1,
+        });
+      }
+      const luma = mat.color.r * 0.299 + mat.color.g * 0.587 + mat.color.b * 0.114;
+      const grey = Math.max(0.15, Math.min(0.85, luma * 0.6 + 0.1));
+      mat.color.setRGB(grey, grey, grey);
+      if (mat.emissive) mat.emissive.setRGB(0, 0, 0);
+      mat.emissiveIntensity = 0;
+    });
+  });
+}
+
+function resaturateFixtures() {
+  fixtures.forEach(f => {
+    if (f.beamGroup) f.beamGroup.visible = (f.intensity ?? 0) > 0.01;
+    if (f.hazerCloud) f.hazerCloud.visible = true;
+    f.group.traverse(child => {
+      if (!child.isMesh || !child.material) return;
+      const cached = fixtureMatCache.get(child.uuid);
+      if (!cached) return;
+      child.material.color.copy(cached.color);
+      if (child.material.emissive) child.material.emissive.copy(cached.emissive);
+      child.material.emissiveIntensity = cached.emissiveIntensity;
+    });
+  });
+}
+
+function updateSceneMaterials() {
+  allStageMeshes.forEach(({ mesh, dark, light }) => {
+    mesh.material = whiteBG ? light : dark;
+  });
+  gridDark.visible  = !whiteBG;
+  gridLight.visible = whiteBG;
+  darkOnlyMeshes.forEach(m => { m.visible = stageVisible && !whiteBG; });
+  edgeMat.color.set(whiteBG ? 0x888888 : 0xFF6B00);
+  edgeMat.opacity = whiteBG ? 0.5 : 0.4;
+  if (whiteBG) desaturateFixtures(); else resaturateFixtures();
+}
+
+function toggleBackground() {
+  whiteBG = !whiteBG;
+  applyBackground();
+  updateSceneMaterials();
+  const btn = document.getElementById('bg-toggle-btn');
+  btn.textContent       = whiteBG ? '🌙 Dark BG' : '☀ White BG';
+  btn.style.borderColor = whiteBG ? '#999' : '';
+  btn.style.color       = whiteBG ? '#111' : '';
+  btn.style.background  = whiteBG ? '#e8e4dc' : '';
 }
 
 // ======= ORBIT CONTROLS (manual) =======
@@ -1661,6 +1782,8 @@ function deselectFixture() {
 
 function updatePropertiesPanel(f) {
   const colorHex = f.color || '#ffaa40';
+  const rotY = Math.round(THREE.MathUtils.radToDeg(f.group.rotation.y));
+
   document.getElementById('prop-content').innerHTML = `
     <div class="prop-section">
       <div class="selected-fixture-header">
@@ -1678,10 +1801,11 @@ function updatePropertiesPanel(f) {
       <div class="prop-row">
         <div class="prop-name">Intensity</div>
         <div class="prop-control">
-          <input type="range" min="0" max="100" value="${f.intensity}"
-            oninput="setIntensity(this.value, this)" id="prop-intensity">
+          <input type="range" min="0" max="100" value="${Math.round(f.intensity)}" id="prop-intensity"
+            oninput="setIntensity(this.value,this); document.getElementById('num-intensity').value=Math.round(this.value)">
         </div>
-        <div class="prop-value" id="val-intensity">${f.intensity}%</div>
+        <input class="prop-num-input" id="num-intensity" type="number" min="0" max="100" value="${Math.round(f.intensity)}"
+          onchange="setIntensity(this.value,this); document.getElementById('prop-intensity').value=this.value">
       </div>
       <div class="prop-row">
         <div class="prop-name">Color</div>
@@ -1692,18 +1816,20 @@ function updatePropertiesPanel(f) {
       <div class="prop-row">
         <div class="prop-name">Pan</div>
         <div class="prop-control">
-          <input type="range" min="-180" max="180" value="${f.panAngle}"
-            oninput="setPan(this.value, this)">
+          <input type="range" min="-180" max="180" value="${f.panAngle}" id="prop-pan"
+            oninput="setPan(this.value,this); document.getElementById('num-pan').value=this.value">
         </div>
-        <div class="prop-value" id="val-pan">${f.panAngle}°</div>
+        <input class="prop-num-input" id="num-pan" type="number" min="-180" max="180" value="${f.panAngle}"
+          onchange="setPan(this.value,this); document.getElementById('prop-pan').value=this.value">
       </div>
       <div class="prop-row">
         <div class="prop-name">Tilt</div>
         <div class="prop-control">
-          <input type="range" min="-180" max="0" value="${f.tiltAngle}"
-            oninput="setTilt(this.value, this)">
+          <input type="range" min="-180" max="0" value="${f.tiltAngle}" id="prop-tilt"
+            oninput="setTilt(this.value,this); document.getElementById('num-tilt').value=this.value">
         </div>
-        <div class="prop-value" id="val-tilt">${f.tiltAngle}°</div>
+        <input class="prop-num-input" id="num-tilt" type="number" min="-180" max="0" value="${f.tiltAngle}"
+          onchange="setTilt(this.value,this); document.getElementById('prop-tilt').value=this.value">
       </div>
     </div>` : ''}
 
@@ -1713,10 +1839,11 @@ function updatePropertiesPanel(f) {
       <div class="prop-row">
         <div class="prop-name">Output</div>
         <div class="prop-control">
-          <input type="range" min="0" max="100" value="${f.hazeIntensity || 60}"
-            oninput="setHazeIntensity(this.value)" id="prop-haze">
+          <input type="range" min="0" max="100" value="${f.hazeIntensity || 60}" id="prop-haze"
+            oninput="setHazeIntensity(this.value); document.getElementById('num-haze').value=this.value">
         </div>
-        <div class="prop-value" id="val-haze">${f.hazeIntensity || 60}%</div>
+        <input class="prop-num-input" id="num-haze" type="number" min="0" max="100" value="${f.hazeIntensity || 60}"
+          onchange="setHazeIntensity(this.value); document.getElementById('prop-haze').value=this.value">
       </div>
       <div class="prop-row" style="margin-top:4px">
         <div class="prop-name" style="font-size:10px;color:#88AACC">Status</div>
@@ -1729,20 +1856,20 @@ function updatePropertiesPanel(f) {
       <div class="prop-row">
         <div class="prop-name">Rotate Y</div>
         <div class="prop-control">
-          <input type="range" min="-180" max="180" step="1"
-            value="${Math.round(THREE.MathUtils.radToDeg(f.group.rotation.y))}"
-            oninput="setRotY(this.value, this)">
+          <input type="range" min="-180" max="180" step="1" value="${rotY}" id="prop-roty"
+            oninput="setRotY(this.value,this); document.getElementById('num-roty').value=this.value">
         </div>
-        <div class="prop-value" id="val-roty">${Math.round(THREE.MathUtils.radToDeg(f.group.rotation.y))}°</div>
+        <input class="prop-num-input" id="num-roty" type="number" min="-180" max="180" value="${rotY}"
+          onchange="setRotY(this.value,this); document.getElementById('prop-roty').value=this.value">
       </div>
     </div>
 
     <div class="prop-section" style="padding:10px 16px">
       <div class="prop-label" style="margin-bottom:6px">3D Gizmo</div>
       <div style="font-size:10px;color:var(--etc-muted);letter-spacing:0.05em;line-height:1.8">
-        <span style="color:#55FF88">●</span> Green ring → Pan (Y)<br>
-        <span style="color:#FF5555">●</span> Red ring → Tilt (X)<br>
-        <span style="color:#5599FF">●</span> Blue ring → Roll (Z)<br>
+        <span style="color:#55FF88">●</span> Green ring → Pan<br>
+        <span style="color:#FF5555">●</span> Red ring → Tilt<br>
+        <span style="color:#5599FF">●</span> Blue ring → Roll<br>
         <span style="color:#FF5555">━</span><span style="color:#55FF88">━</span><span style="color:#5599FF">━</span> Arrows → Move XYZ
       </div>
     </div>
@@ -2199,80 +2326,119 @@ function blackout() {
 }
 
 function applyScene() {
-  const scene_name = document.getElementById('scene-select').value;
-  const scenes = {
-    'Full Stage White': { color: '#ffffff', intensity: 100 },
-    'Warm Down Stage': { color: '#ffaa44', intensity: 80 },
-    'Cool Side Light': { color: '#4488ff', intensity: 70 },
-    'Dramatic Backlight': { color: '#ff3300', intensity: 60 },
-    'Color Mix': null,
-    'Custom': null,
+  const presetName = document.getElementById('scene-select').value;
+  if (presetName === 'Custom') return;
+
+  // Each preset defines color, intensity, and pan/tilt per fixture index
+  const presets = {
+    'Full Stage White': {
+      color: '#ffffff', intensity: 100,
+      pan: 0, tilt: -65,
+    },
+    'Warm Down Stage': {
+      color: '#ffaa44', intensity: 80,
+      pan: 0, tilt: -55,
+    },
+    'Cool Side Light': {
+      colors: ['#4488ff', '#2266cc'],
+      intensity: 70,
+      panFn: (i, total) => i < total / 2 ? -80 : 80,
+      tilt: -40,
+    },
+    'Dramatic Backlight': {
+      color: '#ff3300', intensity: 60,
+      pan: 180, tilt: -30,
+    },
+    'Color Mix': {
+      colors: ['#ff2200','#ff8800','#ffff00','#00ff88','#0088ff','#ff00ff'],
+      intensity: 85,
+      panFn: (i, total) => ((i / total) * 120) - 60,
+      tilt: -50,
+    },
   };
-  const preset = scenes[scene_name];
-  if (!preset) return;
-  const colors = ['#ff2200','#ff8800','#ffff00','#00ff88','#0088ff','#ff00ff'];
-  fixtures.forEach((f, i) => {
-    if (!f.spotLight) return;
-    f.intensity = preset.intensity;
-    const col = scene_name === 'Color Mix' ? colors[i % colors.length] : preset.color;
-    f.color = col;
-    const c3 = new THREE.Color(col);
-    f.spotLight.color = c3;
-    f.spotLight.intensity = (f.intensity / 100) * (f.config.intensity || 1) * 2;
+
+  const p = presets[presetName];
+  if (!p) return;
+  const lightFixtures = fixtures.filter(f => f.spotLight);
+  const total = lightFixtures.length;
+
+  lightFixtures.forEach((f, i) => {
+    f.intensity = p.intensity;
+    // Color
+    if (p.colors) f.color = p.colors[i % p.colors.length];
+    else f.color = p.color;
+    // Pan
+    const pan = p.panFn ? p.panFn(i, total) : (p.pan ?? 0);
+    const tilt = p.tilt ?? -60;
+    f.panAngle = pan;
+    f.tiltAngle = tilt;
+    f.group.rotation.y = THREE.MathUtils.degToRad(pan);
+    f.group.rotation.x = THREE.MathUtils.degToRad(tilt) + Math.PI;
+    applyFixtureState(f);
     updateChannel(f);
-    f.group.traverse(child => {
-      if (child.isMesh && child.material.emissive) child.material.emissive = c3;
-    });
-    if (f.beamGroup) {
-      f.beamGroup._coneMat.color = c3;
-      f.beamGroup._coreMat.color = c3;
-      f.beamGroup._poolMat.color = c3;
-    }
   });
   if (selectedFixture) updatePropertiesPanel(selectedFixture);
 }
 
 // ======= SNEAK =======
-let sneakState = null; // saved levels while sneaking
+let sneakState = null;
+let sneakFading = false;
+let sneakFadeStart = 0;
+let sneakFadeFrom = null;
+let sneakFadeTo = null;
+let sneakFadeDir = null; // 'out' or 'in'
+const SNEAK_DURATION = 2.5;
 
 function sneakDown() {
-  if (sneakState) return;
-  // Save current live state
+  if (sneakFading && sneakFadeDir === 'out') return;
+  // Save the current live look as the restore target
   sneakState = fixtures.map(f => ({
-    id: f.id,
-    intensity: f.intensity,
-    color: f.color,
-    rotX: f.group.rotation.x,
-    rotY: f.group.rotation.y,
-    rotZ: f.group.rotation.z,
-    posX: f.group.position.x,
-    posY: f.group.position.y,
-    posZ: f.group.position.z,
-    tiltAngle: f.tiltAngle,
-    panAngle: f.panAngle,
-    hazeIntensity: f.hazeIntensity || 0,
+    id: f.id, intensity: f.intensity, color: f.color,
+    rotX: f.group.rotation.x, rotY: f.group.rotation.y, rotZ: f.group.rotation.z,
+    posX: f.group.position.x, posY: f.group.position.y, posZ: f.group.position.z,
+    tiltAngle: f.tiltAngle, panAngle: f.panAngle, hazeIntensity: f.hazeIntensity || 0,
   }));
+  // Fade to blackout
+  sneakFadeFrom = captureSnapshot();
+  sneakFadeTo = sneakFadeFrom.map(s => ({ ...s, intensity: 0 }));
+  sneakFadeStart = performance.now();
+  sneakFading = true;
+  sneakFadeDir = 'out';
   document.getElementById('sneak-btn').classList.add('active');
 }
 
 function sneakUp() {
   if (!sneakState) return;
-  // Restore saved state instantly
-  sneakState.forEach(saved => {
-    const f = fixtures.find(x => x.id === saved.id);
+  // Fade back to saved look
+  sneakFadeFrom = captureSnapshot();
+  sneakFadeTo = sneakState;
+  sneakFadeStart = performance.now();
+  sneakFading = true;
+  sneakFadeDir = 'in';
+  document.getElementById('sneak-btn').classList.remove('active');
+}
+
+function tickSneak() {
+  if (!sneakFading) return;
+  const elapsed = (performance.now() - sneakFadeStart) / 1000;
+  const t = Math.min(1, elapsed / SNEAK_DURATION);
+  const ease = t < 0.5 ? 2*t*t : -1 + (4 - 2*t)*t;
+
+  sneakFadeFrom.forEach(fromS => {
+    const toS = sneakFadeTo.find(x => x.id === fromS.id);
+    if (!toS) return;
+    const f = fixtures.find(x => x.id === fromS.id);
     if (!f) return;
-    f.intensity = saved.intensity;
-    f.color = saved.color;
-    f.tiltAngle = saved.tiltAngle;
-    f.panAngle = saved.panAngle;
-    f.group.rotation.set(saved.rotX, saved.rotY, saved.rotZ);
-    f.group.position.set(saved.posX, saved.posY, saved.posZ);
+    f.intensity = fromS.intensity + (toS.intensity - fromS.intensity) * ease;
     applyFixtureState(f);
     updateChannel(f);
   });
-  sneakState = null;
-  document.getElementById('sneak-btn').classList.remove('active');
-  if (selectedFixture) updatePropertiesPanel(selectedFixture);
+
+  if (t >= 1) {
+    sneakFading = false;
+    if (sneakFadeDir === 'in') sneakState = null;
+    if (selectedFixture) updatePropertiesPanel(selectedFixture);
+  }
 }
 
 // ======= CUE SYSTEM =======
@@ -2303,13 +2469,11 @@ function captureSnapshot() {
 }
 
 function addCue() {
-  // Snapshot the current stage state as a new cue
   const snap = captureSnapshot();
   const num = cues.length + 1;
-  const cue = { num, label: `Q${num}`, snapshot: snap };
+  const fade = parseFloat(document.getElementById('fade-time-slider').value) || 2.0;
+  const cue = { num, label: `Q${num}`, snapshot: snap, fade };
   cues.push(cue);
-
-  // New cue becomes both selected and live
   activeCueIndex = cues.length - 1;
   liveCueIndex = activeCueIndex;
   renderCueList();
@@ -2364,7 +2528,8 @@ function crossfadeToCue(toIdx) {
   }
   cueFadeFrom = captureSnapshot();
   cueFadeTo = cues[toIdx].snapshot;
-  cueFadeDuration = parseFloat(document.getElementById('fade-time-slider').value) || 2.0;
+  // Use the target cue's own fade time
+  cueFadeDuration = cues[toIdx].fade ?? parseFloat(document.getElementById('fade-time-slider').value) ?? 2.0;
   cueFadeStart = performance.now();
   cueFading = true;
   liveCueIndex = toIdx;
@@ -2491,28 +2656,29 @@ function renderCueList() {
     const isActive = idx === activeCueIndex;
     const isLive   = idx === liveCueIndex;
 
-    // Arrow connector between cues
+    // Arrow connector with fade time label between cues
     if (idx > 0) {
       const arrow = document.createElement('div');
       arrow.className = 'cue-arrow';
+      arrow.style.position = 'relative';
       list.appendChild(arrow);
     }
 
     const item = document.createElement('div');
     item.className = 'cue-item' + (isActive ? ' active' : '') + (isLive ? ' playing' : '');
-    item.title = `Click to select Q${cue.label} — then press GO to crossfade to it`;
-    item.onclick = () => selectCue(idx);
+    item.title = `Click to select ${cue.label} — GO to crossfade`;
 
-    // Build color swatch from all lit fixture colors in this cue
+    // Color swatch
     const litStates = cue.snapshot.filter(s => {
       const f = fixtures.find(x => x.id === s.id);
       return f && f.config.isLight;
     });
     const swatchColors = litStates.slice(0, 4).map(s => s.color);
     const swatchW = swatchColors.length > 0 ? 100 / swatchColors.length : 100;
+    const fadeVal = (cue.fade ?? 2.0).toFixed(1);
 
     item.innerHTML = `
-      <div class="cue-item-dot">
+      <div class="cue-item-dot" onclick="selectCue(${idx})">
         <svg class="cue-dot-swatch" viewBox="0 0 36 36" preserveAspectRatio="none">
           ${swatchColors.map((col, i) =>
             `<rect x="${i * swatchW}" y="0" width="${swatchW}" height="36" fill="${col}"/>`
@@ -2522,12 +2688,16 @@ function renderCueList() {
         ${isLive ? '<div style="position:absolute;bottom:2px;right:2px;width:5px;height:5px;border-radius:50%;background:#55FF88"></div>' : ''}
         ${isActive && !isLive ? '<div style="position:absolute;top:2px;right:2px;width:5px;height:5px;border-radius:50%;background:#FF6B00"></div>' : ''}
       </div>
-      <div class="cue-num">${cue.label}</div>
+      <div class="cue-num" onclick="selectCue(${idx})">${cue.label}</div>
+      <input class="cue-fade-input" type="number" min="0" max="60" step="0.1" value="${fadeVal}"
+        title="Fade time into this cue"
+        onclick="event.stopPropagation()"
+        onchange="cues[${idx}].fade = Math.max(0, parseFloat(this.value)||0); this.value = cues[${idx}].fade.toFixed(1);"
+      >
     `;
     list.appendChild(item);
   });
 
-  // Scroll active cue into view
   if (activeCueIndex >= 0) {
     const items = list.querySelectorAll('.cue-item');
     if (items[activeCueIndex]) items[activeCueIndex].scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
@@ -2547,6 +2717,7 @@ function animate() {
 
   // Tick cue crossfade
   tickCueFade();
+  tickSneak();
 
   // Animate moving lights
   fixtures.forEach(f => {
