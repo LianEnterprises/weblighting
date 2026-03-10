@@ -1,0 +1,2626 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ETC Lighting Simulator</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;600;700;900&family=Barlow:wght@300;400;500&display=swap');
+
+  :root {
+    --etc-orange: #FF6B00;
+    --etc-dark: #0A0A0A;
+    --etc-panel: #111214;
+    --etc-border: #2A2A2E;
+    --etc-text: #E8E8E8;
+    --etc-muted: #666;
+    --etc-accent: #FF8C2A;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--etc-dark);
+    color: var(--etc-text);
+    font-family: 'Barlow', sans-serif;
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+    user-select: none;
+  }
+
+  #app {
+    display: grid;
+    grid-template-columns: 220px 1fr 260px;
+    grid-template-rows: 56px 1fr 160px;
+    height: 100vh;
+    gap: 0;
+  }
+
+  /* TOPBAR */
+  #topbar {
+    grid-column: 1 / -1;
+    background: var(--etc-panel);
+    border-bottom: 1px solid var(--etc-border);
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    gap: 24px;
+    z-index: 10;
+  }
+
+  .etc-logo {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 900;
+    font-size: 22px;
+    letter-spacing: 0.08em;
+    color: var(--etc-orange);
+    text-transform: uppercase;
+  }
+
+  .etc-logo span {
+    color: #fff;
+    font-weight: 300;
+  }
+
+  .topbar-title {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 13px;
+    font-weight: 400;
+    letter-spacing: 0.15em;
+    color: var(--etc-muted);
+    text-transform: uppercase;
+    border-left: 1px solid var(--etc-border);
+    padding-left: 24px;
+  }
+
+  .topbar-actions {
+    margin-left: auto;
+    display: flex;
+    gap: 8px;
+  }
+
+  .btn {
+    background: transparent;
+    border: 1px solid var(--etc-border);
+    color: var(--etc-text);
+    padding: 6px 14px;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .btn:hover { border-color: var(--etc-orange); color: var(--etc-orange); }
+  .btn.primary { background: var(--etc-orange); border-color: var(--etc-orange); color: #000; }
+  .btn.primary:hover { background: var(--etc-accent); }
+
+  /* LEFT PANEL - Fixture Library */
+  #fixture-library {
+    background: var(--etc-panel);
+    border-right: 1px solid var(--etc-border);
+    overflow-y: auto;
+    padding: 0;
+  }
+
+  .panel-header {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--etc-orange);
+    padding: 14px 16px 10px;
+    border-bottom: 1px solid var(--etc-border);
+    position: sticky;
+    top: 0;
+    background: var(--etc-panel);
+    z-index: 2;
+  }
+
+  .fixture-category {
+    padding: 10px 16px 4px;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    color: var(--etc-muted);
+    text-transform: uppercase;
+  }
+
+  .fixture-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 16px;
+    cursor: grab;
+    transition: background 0.1s;
+    border-left: 2px solid transparent;
+  }
+
+  .fixture-item:hover {
+    background: rgba(255,107,0,0.08);
+    border-left-color: var(--etc-orange);
+  }
+
+  .fixture-item:active { cursor: grabbing; }
+
+  .fixture-icon {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .fixture-icon svg { width: 100%; height: 100%; }
+
+  .fixture-info { flex: 1; min-width: 0; }
+
+  .fixture-name {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--etc-text);
+    letter-spacing: 0.05em;
+  }
+
+  .fixture-sub {
+    font-size: 10px;
+    color: var(--etc-muted);
+    letter-spacing: 0.05em;
+  }
+
+  /* 3D VIEWPORT */
+  #viewport {
+    position: relative;
+    overflow: hidden;
+    background: #050508;
+  }
+
+  #three-canvas {
+    width: 100% !important;
+    height: 100% !important;
+    display: block;
+  }
+
+  .viewport-overlay {
+    position: absolute;
+    bottom: 16px;
+    left: 16px;
+    display: flex;
+    gap: 8px;
+  }
+
+  .view-btn {
+    background: rgba(10,10,10,0.85);
+    border: 1px solid var(--etc-border);
+    color: var(--etc-muted);
+    padding: 5px 10px;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .view-btn:hover, .view-btn.active { 
+    border-color: var(--etc-orange);
+    color: var(--etc-orange);
+    background: rgba(255,107,0,0.1);
+  }
+
+  .drop-hint {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    pointer-events: none;
+    opacity: 0.3;
+    transition: opacity 0.3s;
+  }
+
+  .drop-hint.hidden { opacity: 0; }
+
+  .drop-hint-icon {
+    font-size: 48px;
+    display: block;
+    margin-bottom: 12px;
+  }
+
+  .drop-hint-text {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 13px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--etc-muted);
+  }
+
+  /* RIGHT PANEL - Properties */
+  #properties-panel {
+    background: var(--etc-panel);
+    border-left: 1px solid var(--etc-border);
+    overflow-y: auto;
+  }
+
+  .prop-section {
+    padding: 16px;
+    border-bottom: 1px solid var(--etc-border);
+  }
+
+  .prop-label {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--etc-muted);
+    margin-bottom: 10px;
+  }
+
+  .prop-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+
+  .prop-name {
+    font-size: 11px;
+    color: var(--etc-muted);
+    width: 70px;
+    flex-shrink: 0;
+    letter-spacing: 0.05em;
+  }
+
+  .prop-control {
+    flex: 1;
+  }
+
+  input[type="range"] {
+    width: 100%;
+    height: 3px;
+    appearance: none;
+    background: var(--etc-border);
+    outline: none;
+    cursor: pointer;
+  }
+
+  input[type="range"]::-webkit-slider-thumb {
+    appearance: none;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--etc-orange);
+    cursor: pointer;
+  }
+
+  input[type="color"] {
+    width: 100%;
+    height: 28px;
+    border: 1px solid var(--etc-border);
+    background: transparent;
+    cursor: pointer;
+    padding: 2px;
+  }
+
+  .prop-value {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 12px;
+    color: var(--etc-orange);
+    width: 36px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  .no-selection {
+    padding: 32px 16px;
+    text-align: center;
+  }
+
+  .no-selection-icon { font-size: 32px; margin-bottom: 12px; opacity: 0.3; }
+
+  .no-selection-text {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 12px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--etc-muted);
+  }
+
+  .selected-fixture-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+  }
+
+  .selected-fixture-name {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--etc-text);
+    letter-spacing: 0.06em;
+  }
+
+  .selected-fixture-type {
+    font-size: 11px;
+    color: var(--etc-muted);
+  }
+
+  .delete-btn {
+    margin-top: 8px;
+    width: 100%;
+    background: transparent;
+    border: 1px solid #3A1010;
+    color: #FF4040;
+    padding: 6px;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .delete-btn:hover { background: rgba(255,60,60,0.1); border-color: #FF4040; }
+
+  /* BOTTOM PANEL - Console / Channel View */
+  #console-panel {
+    grid-column: 1 / -1;
+    background: #0C0C0F;
+    border-top: 1px solid var(--etc-border);
+    display: flex;
+    overflow: hidden;
+  }
+
+  .console-channels {
+    flex: 1;
+    display: flex;
+    align-items: flex-end;
+    padding: 12px 16px;
+    gap: 6px;
+    overflow-x: auto;
+  }
+
+  .channel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+
+  .channel-fader-track {
+    width: 22px;
+    height: 80px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--etc-border);
+    border-radius: 2px;
+    position: relative;
+    cursor: ns-resize;
+  }
+
+  .channel-fader-fill {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--etc-orange);
+    border-radius: 2px;
+    transition: height 0.1s;
+  }
+
+  .channel-fader-handle {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 20px;
+    height: 8px;
+    background: var(--etc-text);
+    border-radius: 2px;
+    cursor: ns-resize;
+  }
+
+  .channel-num {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 10px;
+    color: var(--etc-muted);
+    letter-spacing: 0.08em;
+  }
+
+  .channel-val {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--etc-orange);
+    letter-spacing: 0.05em;
+  }
+
+  .channel.active .channel-num { color: var(--etc-orange); }
+
+  .console-side {
+    width: 180px;
+    border-left: 1px solid var(--etc-border);
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .console-label {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--etc-orange);
+  }
+
+  .grand-master-area { display: flex; align-items: center; gap: 10px; }
+
+  .grand-master-track {
+    flex: 1;
+    height: 6px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid var(--etc-border);
+    border-radius: 2px;
+    position: relative;
+  }
+
+  .grand-master-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--etc-orange), #FFAA00);
+    border-radius: 2px;
+    width: 100%;
+  }
+
+  #scene-select {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--etc-border);
+    color: var(--etc-text);
+    padding: 5px 8px;
+    font-family: 'Barlow', sans-serif;
+    font-size: 11px;
+    width: 100%;
+    cursor: pointer;
+  }
+
+  #scene-select option { background: #1a1a1e; }
+
+  /* Drag ghost */
+  #drag-ghost {
+    position: fixed;
+    pointer-events: none;
+    z-index: 9999;
+    opacity: 0.75;
+    display: none;
+    transform: translate(-50%, -50%);
+  }
+
+  .fixture-item.dragging { opacity: 0.4; }
+
+  /* CUE SYSTEM */
+  #cue-section {
+    width: 320px;
+    border-left: 1px solid var(--etc-border);
+    display: flex;
+    flex-direction: column;
+    background: #0C0C0F;
+    flex-shrink: 0;
+  }
+
+  .cue-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px 6px;
+    border-bottom: 1px solid var(--etc-border);
+  }
+
+  .cue-header-actions { display: flex; gap: 5px; }
+
+  .cue-btn {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    border: 1px solid var(--etc-border);
+    background: transparent;
+    cursor: pointer;
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    transition: all 0.12s;
+    line-height: 1;
+  }
+
+  .cue-btn-add { color: #55FF88; border-color: #224433; }
+  .cue-btn-add:hover { background: rgba(85,255,136,0.12); border-color: #55FF88; }
+  .cue-btn-del { color: #FF5555; border-color: #442222; font-size: 11px; }
+  .cue-btn-del:hover { background: rgba(255,85,85,0.12); border-color: #FF5555; }
+
+  #cue-list-scroll {
+    flex: 1;
+    overflow-x: auto;
+    overflow-y: hidden;
+    display: flex;
+    align-items: center;
+    padding: 6px 8px;
+  }
+
+  #cue-list {
+    display: flex;
+    gap: 5px;
+    align-items: center;
+    min-height: 52px;
+  }
+
+  .cue-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .cue-item-dot {
+    width: 36px;
+    height: 36px;
+    border: 2px solid var(--etc-border);
+    border-radius: 3px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.12s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .cue-item.active .cue-item-dot {
+    border-color: var(--etc-orange);
+    box-shadow: 0 0 8px rgba(255,107,0,0.4);
+  }
+
+  .cue-item.playing .cue-item-dot {
+    border-color: #55FF88;
+    box-shadow: 0 0 8px rgba(85,255,136,0.5);
+  }
+
+  .cue-item:hover .cue-item-dot { border-color: var(--etc-muted); }
+
+  .cue-dot-swatch {
+    width: 100%;
+    height: 100%;
+    opacity: 0.6;
+  }
+
+  .cue-num {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    color: var(--etc-muted);
+  }
+
+  .cue-item.active .cue-num { color: var(--etc-orange); }
+
+  .cue-arrow {
+    width: 14px;
+    height: 2px;
+    background: var(--etc-border);
+    flex-shrink: 0;
+    position: relative;
+  }
+  .cue-arrow::after {
+    content: '';
+    position: absolute;
+    right: -1px;
+    top: -3px;
+    border: 4px solid transparent;
+    border-left-color: var(--etc-border);
+  }
+
+  .cue-transport {
+    display: flex;
+    gap: 4px;
+    padding: 5px 8px;
+    border-top: 1px solid var(--etc-border);
+  }
+
+  .cue-transport-btn {
+    flex: 1;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--etc-border);
+    color: var(--etc-text);
+    padding: 4px 0;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    transition: all 0.12s;
+  }
+
+  .cue-transport-btn:hover { border-color: var(--etc-muted); color: #fff; }
+
+  .cue-go {
+    background: rgba(85,255,136,0.08);
+    border-color: #334433;
+    color: #55FF88;
+    letter-spacing: 0.2em;
+    font-size: 13px;
+  }
+
+  .cue-go:hover { background: rgba(85,255,136,0.18); border-color: #55FF88; }
+  .cue-go.firing { background: rgba(85,255,136,0.35); border-color: #55FF88; }
+
+  .cue-fade-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px 6px;
+    border-top: 1px solid var(--etc-border);
+  }
+
+  .cue-fade-label {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    color: var(--etc-muted);
+    flex-shrink: 0;
+  }
+
+  .cue-fade-val {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 11px;
+    color: var(--etc-orange);
+    flex-shrink: 0;
+    width: 28px;
+    text-align: right;
+  }
+
+  /* SNEAK BUTTON */
+  .sneak-button {
+    width: 100%;
+    margin-top: 8px;
+    padding: 7px 0;
+    background: rgba(255,160,0,0.06);
+    border: 1px solid #443311;
+    color: #FFAA22;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.1s;
+    position: relative;
+  }
+
+  .sneak-button:hover { border-color: #FFAA22; background: rgba(255,160,0,0.12); }
+  .sneak-button.active {
+    background: rgba(255,160,0,0.25);
+    border-color: #FFAA22;
+    box-shadow: 0 0 12px rgba(255,160,0,0.3);
+    color: #FFD060;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--etc-border); border-radius: 2px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--etc-muted); }
+</style>
+</head>
+<body>
+
+<div id="app">
+
+  <!-- TOPBAR -->
+  <div id="topbar">
+    <div class="etc-logo">ETC<span> Lighting</span></div>
+    <div class="topbar-title">3D Stage Simulator</div>
+    <div class="topbar-actions">
+      <button class="btn" onclick="clearAll()">Clear Stage</button>
+      <button class="btn" onclick="resetCamera()">Reset View</button>
+      <button class="btn" id="stage-toggle-btn" onclick="toggleStage()">🏛 Hide Stage</button>
+      <button class="btn primary" onclick="blackout()">Blackout</button>
+    </div>
+  </div>
+
+  <!-- LEFT: Fixture Library -->
+  <div id="fixture-library">
+    <div class="panel-header">⚡ Fixture Library</div>
+
+    <div class="fixture-category">ETC Spotlights</div>
+    <div class="fixture-item" draggable="true" data-type="source4" data-name="Source Four® 19°" data-sub="575W · Leko">
+      <div class="fixture-icon"><svg viewBox="0 0 32 32" fill="none"><polygon points="8,6 24,6 28,26 4,26" fill="#FF6B00" opacity="0.7"/><rect x="12" y="2" width="8" height="5" fill="#ccc" rx="1"/><line x1="16" y1="26" x2="8" y2="32" stroke="#888" stroke-width="1.5"/><line x1="16" y1="26" x2="24" y2="32" stroke="#888" stroke-width="1.5"/></svg></div>
+      <div class="fixture-info"><div class="fixture-name">Source Four® 19°</div><div class="fixture-sub">575W · Leko</div></div>
+    </div>
+    <div class="fixture-item" draggable="true" data-type="source4-26" data-name="Source Four® 26°" data-sub="575W · Leko">
+      <div class="fixture-icon"><svg viewBox="0 0 32 32" fill="none"><polygon points="10,6 22,6 27,26 5,26" fill="#FF8C2A" opacity="0.7"/><rect x="12" y="2" width="8" height="5" fill="#ccc" rx="1"/><line x1="16" y1="26" x2="8" y2="32" stroke="#888" stroke-width="1.5"/><line x1="16" y1="26" x2="24" y2="32" stroke="#888" stroke-width="1.5"/></svg></div>
+      <div class="fixture-info"><div class="fixture-name">Source Four® 26°</div><div class="fixture-sub">575W · Leko</div></div>
+    </div>
+    <div class="fixture-item" draggable="true" data-type="source4par" data-name="Source Four® PAR" data-sub="575W · PAR">
+      <div class="fixture-icon"><svg viewBox="0 0 32 32" fill="none"><rect x="8" y="6" width="16" height="16" rx="8" fill="#FF6B00" opacity="0.6"/><rect x="10" y="8" width="12" height="12" rx="6" fill="#FFD080" opacity="0.5"/><rect x="13" y="3" width="6" height="4" fill="#aaa" rx="1"/><line x1="16" y1="22" x2="16" y2="29" stroke="#888" stroke-width="2"/></svg></div>
+      <div class="fixture-info"><div class="fixture-name">Source Four® PAR</div><div class="fixture-sub">575W · PAR</div></div>
+    </div>
+
+    <div class="fixture-category">ETC LED Series</div>
+    <div class="fixture-item" draggable="true" data-type="lustr" data-name="Lustr® X8" data-sub="LED · RGBA-Lime-Indigo">
+      <div class="fixture-icon"><svg viewBox="0 0 32 32" fill="none"><rect x="6" y="8" width="20" height="14" rx="3" fill="#1A1A2E"/><rect x="8" y="10" width="16" height="10" rx="2" fill="#330066" opacity="0.8"/><circle cx="11" cy="15" r="2" fill="#FF0080" opacity="0.9"/><circle cx="16" cy="15" r="2" fill="#00AAFF" opacity="0.9"/><circle cx="21" cy="15" r="2" fill="#00FF80" opacity="0.9"/><rect x="12" y="4" width="8" height="5" fill="#888" rx="1"/></svg></div>
+      <div class="fixture-info"><div class="fixture-name">Lustr® X8</div><div class="fixture-sub">LED · RGBA-Lime-Indigo</div></div>
+    </div>
+    <div class="fixture-item" draggable="true" data-type="desire" data-name="Desire D60" data-sub="LED · Profile">
+      <div class="fixture-icon"><svg viewBox="0 0 32 32" fill="none"><polygon points="9,7 23,7 26,24 6,24" fill="#0066FF" opacity="0.6"/><rect x="11" y="3" width="10" height="5" fill="#888" rx="1"/><circle cx="16" cy="15" r="4" fill="#4499FF" opacity="0.7"/></svg></div>
+      <div class="fixture-info"><div class="fixture-name">Desire D60</div><div class="fixture-sub">LED · Profile</div></div>
+    </div>
+
+    <div class="fixture-category">Moving Lights</div>
+    <div class="fixture-item" draggable="true" data-type="movingyoke" data-name="ColorSource Spot" data-sub="LED · Moving Yoke">
+      <div class="fixture-icon"><svg viewBox="0 0 32 32" fill="none"><rect x="10" y="2" width="12" height="6" rx="2" fill="#555"/><rect x="7" y="8" width="18" height="12" rx="3" fill="#333"/><circle cx="16" cy="14" r="5" fill="#222"/><circle cx="16" cy="14" r="3" fill="#FF6B00" opacity="0.8"/><line x1="10" y1="20" x2="6" y2="28" stroke="#666" stroke-width="2"/><line x1="22" y1="20" x2="26" y2="28" stroke="#666" stroke-width="2"/></svg></div>
+      <div class="fixture-info"><div class="fixture-name">ColorSource Spot</div><div class="fixture-sub">LED · Moving Yoke</div></div>
+    </div>
+    <div class="fixture-item" draggable="true" data-type="movingyoke2" data-name="ColorSource Par" data-sub="LED · Moving Wash">
+      <div class="fixture-icon"><svg viewBox="0 0 32 32" fill="none"><rect x="10" y="2" width="12" height="6" rx="2" fill="#444"/><rect x="8" y="8" width="16" height="12" rx="8" fill="#333"/><circle cx="16" cy="14" r="5" fill="#1A1A3A"/><circle cx="16" cy="14" r="3" fill="#4466FF" opacity="0.8"/><line x1="10" y1="20" x2="6" y2="28" stroke="#666" stroke-width="2"/><line x1="22" y1="20" x2="26" y2="28" stroke="#666" stroke-width="2"/></svg></div>
+      <div class="fixture-info"><div class="fixture-name">ColorSource Par</div><div class="fixture-sub">LED · Moving Wash</div></div>
+    </div>
+
+    <div class="fixture-category">Atmosphere</div>
+    <div class="fixture-item" draggable="true" data-type="hazer" data-name="MDG Hazer" data-sub="Water-based · Haze">
+      <div class="fixture-icon"><svg viewBox="0 0 32 32" fill="none"><rect x="6" y="14" width="20" height="10" rx="2" fill="#334" stroke="#666" stroke-width="1"/><rect x="10" y="16" width="12" height="6" rx="1" fill="#222"/><circle cx="16" cy="19" r="2" fill="#88AACC" opacity="0.7"/><path d="M4 10 Q8 6 12 10 Q16 14 20 10 Q24 6 28 10" stroke="#88AACC" stroke-width="1.2" fill="none" opacity="0.5"/><path d="M6 7 Q10 3 14 7 Q18 11 22 7 Q26 3 30 7" stroke="#88AACC" stroke-width="0.8" fill="none" opacity="0.3"/></svg></div>
+      <div class="fixture-info"><div class="fixture-name">MDG Hazer</div><div class="fixture-sub">Water-based · Haze</div></div>
+    </div>
+
+    <div class="fixture-category">Stage Props</div>
+    <div class="fixture-item" draggable="true" data-type="truss" data-name="Box Truss 3m" data-sub="Aluminium · 290mm">
+      <div class="fixture-icon"><svg viewBox="0 0 32 32" fill="none"><rect x="2" y="10" width="28" height="4" fill="#888" opacity="0.7"/><line x1="4" y1="10" x2="8" y2="14" stroke="#aaa" stroke-width="1"/><line x1="10" y1="10" x2="14" y2="14" stroke="#aaa" stroke-width="1"/><line x1="16" y1="10" x2="20" y2="14" stroke="#aaa" stroke-width="1"/><line x1="22" y1="10" x2="26" y2="14" stroke="#aaa" stroke-width="1"/><rect x="2" y="18" width="28" height="4" fill="#888" opacity="0.7"/></svg></div>
+      <div class="fixture-info"><div class="fixture-name">Box Truss 3m</div><div class="fixture-sub">Aluminium · 290mm</div></div>
+    </div>
+    <div class="fixture-item" draggable="true" data-type="stand" data-name="Light Stand" data-sub="4m · Telescopic">
+      <div class="fixture-icon"><svg viewBox="0 0 32 32" fill="none"><rect x="14" y="2" width="4" height="22" fill="#888" rx="1"/><line x1="8" y1="24" x2="16" y2="24" stroke="#aaa" stroke-width="2"/><line x1="24" y1="24" x2="16" y2="24" stroke="#aaa" stroke-width="2"/><line x1="8" y1="24" x2="4" y2="30" stroke="#aaa" stroke-width="2"/><line x1="24" y1="24" x2="28" y2="30" stroke="#aaa" stroke-width="2"/><line x1="16" y1="24" x2="16" y2="30" stroke="#aaa" stroke-width="2"/></svg></div>
+      <div class="fixture-info"><div class="fixture-name">Light Stand</div><div class="fixture-sub">4m · Telescopic</div></div>
+    </div>
+    <div class="fixture-item" draggable="true" data-type="cycwall" data-name="Cyc / Backdrop" data-sub="Stage Element">
+      <div class="fixture-icon"><svg viewBox="0 0 32 32" fill="none"><rect x="3" y="4" width="26" height="22" rx="1" fill="#334" opacity="0.8" stroke="#666" stroke-width="1"/></svg></div>
+      <div class="fixture-info"><div class="fixture-name">Cyc / Backdrop</div><div class="fixture-sub">Stage Element</div></div>
+    </div>
+    <div class="fixture-item" draggable="true" data-type="box" data-name="Prop Box" data-sub="Stage Block">
+      <div class="fixture-icon"><svg viewBox="0 0 32 32" fill="none"><rect x="4" y="10" width="20" height="18" fill="#5A4" opacity="0.6" stroke="#888" stroke-width="1"/><polygon points="4,10 14,4 24,10" fill="#8C6" opacity="0.6" stroke="#888" stroke-width="1"/></svg></div>
+      <div class="fixture-info"><div class="fixture-name">Prop Box</div><div class="fixture-sub">Stage Block</div></div>
+    </div>
+    <div class="fixture-item" draggable="true" data-type="person" data-name="Performer Mark" data-sub="Stage Position">
+      <div class="fixture-icon"><svg viewBox="0 0 32 32" fill="none"><circle cx="16" cy="8" r="4" fill="#FFB980" opacity="0.8"/><rect x="11" y="13" width="10" height="12" rx="2" fill="#4466AA" opacity="0.8"/><rect x="9" y="25" width="6" height="5" rx="1" fill="#333"/><rect x="17" y="25" width="6" height="5" rx="1" fill="#333"/></svg></div>
+      <div class="fixture-info"><div class="fixture-name">Performer Mark</div><div class="fixture-sub">Stage Position</div></div>
+    </div>
+  </div>
+
+  <!-- MAIN: 3D Viewport -->
+  <div id="viewport">
+    <canvas id="three-canvas"></canvas>
+    <div class="drop-hint" id="drop-hint">
+      <span class="drop-hint-icon">💡</span>
+      <div class="drop-hint-text">Drag fixtures onto stage</div>
+    </div>
+
+    <div class="viewport-overlay">
+      <button class="view-btn active" onclick="setView('perspective')">Perspective</button>
+      <button class="view-btn" onclick="setView('top')">Top</button>
+      <button class="view-btn" onclick="setView('front')">Front</button>
+      <button class="view-btn" onclick="setView('side')">Side</button>
+    </div>
+  </div>
+
+  <!-- RIGHT: Properties -->
+  <div id="properties-panel">
+    <div class="panel-header">🎛 Properties</div>
+    <div id="prop-content">
+      <div class="no-selection">
+        <div class="no-selection-icon">⬡</div>
+        <div class="no-selection-text">Select a fixture<br>to edit properties</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BOTTOM: Console + Cue System -->
+  <div id="console-panel">
+
+    <!-- Channel faders -->
+    <div class="console-channels" id="channel-strip"></div>
+
+    <!-- Cue List -->
+    <div id="cue-section">
+      <div class="cue-header">
+        <span class="console-label" style="margin:0">CUE LIST</span>
+        <div class="cue-header-actions">
+          <button class="cue-btn cue-btn-add" onclick="addCue()" title="Record new cue">+</button>
+          <button class="cue-btn cue-btn-del" onclick="deleteCue()" title="Delete selected cue">✕</button>
+        </div>
+      </div>
+      <div id="cue-list-scroll">
+        <div id="cue-list"></div>
+      </div>
+      <div class="cue-transport">
+        <button class="cue-transport-btn" onclick="cueBack()" title="Previous cue">◀</button>
+        <button class="cue-transport-btn cue-go" onclick="cueGo()" title="Go to next cue">GO</button>
+        <button class="cue-transport-btn" onclick="cueNext()" title="Skip to next cue">▶</button>
+      </div>
+      <div class="cue-fade-row">
+        <span class="cue-fade-label">FADE</span>
+        <input type="range" id="fade-time-slider" min="0" max="10" step="0.1" value="2" oninput="updateFadeLabel(this.value)">
+        <span class="cue-fade-val" id="fade-time-val">2.0s</span>
+      </div>
+    </div>
+
+    <!-- Grand Master + Sneak + Scene -->
+    <div class="console-side">
+      <div class="console-label">Grand Master</div>
+      <div class="grand-master-area">
+        <div class="grand-master-track"><div class="grand-master-fill" id="gm-fill"></div></div>
+        <span style="font-family:'Barlow Condensed';font-size:13px;color:var(--etc-orange);font-weight:700">FL</span>
+      </div>
+
+      <button id="sneak-btn" class="sneak-button" onmousedown="sneakDown()" onmouseup="sneakUp()" ontouchstart="sneakDown()" ontouchend="sneakUp()">
+        SNEAK
+      </button>
+
+      <div class="console-label" style="margin-top:6px">Scene</div>
+      <select id="scene-select">
+        <option>Full Stage White</option>
+        <option>Warm Down Stage</option>
+        <option>Cool Side Light</option>
+        <option>Dramatic Backlight</option>
+        <option>Color Mix</option>
+        <option>Custom</option>
+      </select>
+      <button class="btn" style="margin-top:6px;width:100%" onclick="applyScene()">Apply Scene</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- Drag Ghost -->
+<div id="drag-ghost">
+  <svg width="36" height="36" viewBox="0 0 32 32" fill="none">
+    <polygon points="8,6 24,6 28,26 4,26" fill="#FF6B00" opacity="0.9"/>
+    <rect x="12" y="2" width="8" height="5" fill="#ccc" rx="1"/>
+  </svg>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ======= THREE.JS SETUP =======
+const canvas = document.getElementById('three-canvas');
+const viewport = document.getElementById('viewport');
+
+let W = viewport.clientWidth, H = viewport.clientHeight;
+
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+renderer.setSize(W, H);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ReinhardToneMapping;
+renderer.toneMappingExposure = 1.2;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x050508);
+scene.fog = new THREE.Fog(0x050508, 30, 80);
+
+const camera = new THREE.PerspectiveCamera(55, W / H, 0.1, 200);
+camera.position.set(0, 12, 18);
+camera.lookAt(0, 0, 0);
+
+// ======= THEATRE STAGE SCENE =======
+
+// --- Materials ---
+const matStageDeck   = new THREE.MeshLambertMaterial({ color: 0x2A1F14 }); // dark hardwood
+const matStageDeckW  = new THREE.MeshLambertMaterial({ color: 0xC8B89A }); // light hardwood (white mode)
+const matMasking     = new THREE.MeshLambertMaterial({ color: 0x0A0A0A, side: THREE.DoubleSide });
+const matProscenium  = new THREE.MeshLambertMaterial({ color: 0x2C2830 });
+const matProsceniumW = new THREE.MeshLambertMaterial({ color: 0xE8E0D0 });
+const matConcrete    = new THREE.MeshLambertMaterial({ color: 0x1C1C22 });
+const matConcreteW   = new THREE.MeshLambertMaterial({ color: 0xDDDDD8 });
+const matWood        = new THREE.MeshLambertMaterial({ color: 0x3A2A18 });
+const matMetal       = new THREE.MeshLambertMaterial({ color: 0x888899 });
+
+// Track all togglable scene meshes
+const darkOnlyMeshes  = [];  // only visible in dark mode
+const lightOnlyMeshes = [];  // only visible in light mode
+const allStageMeshes  = [];  // always visible, swap material
+
+// Helper to add a mesh that changes material with BG
+function addDualMesh(geo, darkMat, lightMat, pos, rot, castShadow, receiveShadow) {
+  const m = new THREE.Mesh(geo, darkMat);
+  if (pos) m.position.set(...pos);
+  if (rot) m.rotation.set(...rot);
+  if (castShadow)   m.castShadow = true;
+  if (receiveShadow) m.receiveShadow = true;
+  scene.add(m);
+  allStageMeshes.push({ mesh: m, dark: darkMat, light: lightMat });
+  return m;
+}
+
+// --- Stage deck (raised platform) ---
+const deckGeo = new THREE.BoxGeometry(22, 0.35, 13);
+addDualMesh(deckGeo, matStageDeck, matStageDeckW, [0, -0.175, 0], null, false, true);
+
+// Stage deck planks (dark lines across)
+for (let z = -6; z <= 6; z += 0.9) {
+  const plankGeo = new THREE.BoxGeometry(22, 0.36, 0.04);
+  const plankMat = new THREE.MeshBasicMaterial({ color: 0x1A1008, transparent: true, opacity: 0.5 });
+  const plankMatW = new THREE.MeshBasicMaterial({ color: 0x8B7355, transparent: true, opacity: 0.25 });
+  addDualMesh(plankGeo, plankMat, plankMatW, [0, 0.005, z], null, false, false);
+}
+
+// Downstage lip / apron edge
+const apronGeo = new THREE.BoxGeometry(22, 0.12, 0.25);
+addDualMesh(apronGeo, matWood, new THREE.MeshLambertMaterial({ color: 0xB8A882 }), [0, 0.06, 6.5], null, false, false);
+
+// --- Pit / orchestra area (lower floor in front) ---
+const pitGeo = new THREE.BoxGeometry(18, 0.1, 5);
+const pitMat = new THREE.MeshLambertMaterial({ color: 0x111116 });
+const pitMatW = new THREE.MeshLambertMaterial({ color: 0xC8C8C0 });
+addDualMesh(pitGeo, pitMat, pitMatW, [0, -0.6, 10], null, false, true);
+
+// Pit edge rail
+const railGeo = new THREE.BoxGeometry(18, 0.3, 0.12);
+const railMat = new THREE.MeshLambertMaterial({ color: 0x553322 });
+addDualMesh(railGeo, railMat, new THREE.MeshLambertMaterial({ color: 0x998877 }), [0, 0.0, 7.3], null, false, false);
+
+// --- Back wall / cyc ---
+const cycGeo = new THREE.BoxGeometry(22, 12, 0.2);
+const cycMat = new THREE.MeshLambertMaterial({ color: 0x0D0D14 });
+const cycMatW = new THREE.MeshLambertMaterial({ color: 0xEEEEEE });
+addDualMesh(cycGeo, cycMat, cycMatW, [0, 5.8, -7.1], null, false, true);
+
+// --- Side walls ---
+[-11.1, 11.1].forEach((x, i) => {
+  const wallGeo = new THREE.BoxGeometry(0.2, 12, 14);
+  const wallMat = new THREE.MeshLambertMaterial({ color: 0x0C0C12 });
+  const wallMatW = new THREE.MeshLambertMaterial({ color: 0xD8D8D0 });
+  addDualMesh(wallGeo, wallMat, wallMatW, [x, 5.8, 0], null, false, true);
+});
+
+// --- Ceiling / grid ---
+const ceilingGeo = new THREE.BoxGeometry(22, 0.15, 14);
+const ceilMat = new THREE.MeshLambertMaterial({ color: 0x0A0A0F });
+const ceilMatW = new THREE.MeshLambertMaterial({ color: 0xD0D0CC });
+addDualMesh(ceilingGeo, ceilMat, ceilMatW, [0, 11.9, 0], null, false, false);
+
+// --- Proscenium arch ---
+// Top beam
+const archTopGeo = new THREE.BoxGeometry(22, 1.5, 1.0);
+addDualMesh(archTopGeo, matProscenium, matProsceniumW, [0, 9.5, 6.6], null, true, false);
+
+// Side legs
+[-9.5, 9.5].forEach(x => {
+  const legGeo = new THREE.BoxGeometry(2.5, 12, 1.0);
+  addDualMesh(legGeo, matProscenium, matProsceniumW, [x, 5.8, 6.6], null, true, true);
+});
+
+// Arch inner bevel (decorative strip)
+const archBevelGeo = new THREE.BoxGeometry(14.5, 0.3, 0.15);
+addDualMesh(archBevelGeo, matMetal, new THREE.MeshLambertMaterial({color:0xBBAA99}), [0, 8.8, 6.12], null, false, false);
+
+// --- Masking legs (black legs hanging from above, pairs) ---
+const legPositions = [-5.5, -1.5, 2.5, 6.0];
+const legSides     = [-8.0, 8.0];
+legPositions.forEach(z => {
+  legSides.forEach(x => {
+    const maskGeo = new THREE.BoxGeometry(0.08, 8, 1.6);
+    const leg = new THREE.Mesh(maskGeo, matMasking);
+    leg.position.set(x, 7.8, z);
+    leg.castShadow = false;
+    scene.add(leg);
+    darkOnlyMeshes.push(leg);
+  });
+  // Horizontal border (teaser)
+  const teaserGeo = new THREE.BoxGeometry(16.5, 0.08, 1.4);
+  const teaser = new THREE.Mesh(teaserGeo, matMasking);
+  teaser.position.set(0, 11.6, z);
+  scene.add(teaser);
+  darkOnlyMeshes.push(teaser);
+});
+
+// --- Main overhead trusses ---
+const trussPositions = [-4.5, -1.0, 2.5, 6.0];
+trussPositions.forEach((z, i) => {
+  // Main truss bar
+  const trussGeo = new THREE.BoxGeometry(16, 0.28, 0.28);
+  addDualMesh(trussGeo, matMetal, matMetal, [0, 9.2, z], null, false, false);
+
+  // Truss diagonals
+  for (let x = -7; x < 7; x += 1.4) {
+    const diagGeo = new THREE.BoxGeometry(0.06, 0.06, 0.4);
+    addDualMesh(diagGeo, matMetal, matMetal, [x, 9.2, z], [0, 0, Math.PI / 4], false, false);
+  }
+
+  // Truss support cables
+  [-7, 7].forEach(x => {
+    const cableGeo = new THREE.CylinderGeometry(0.02, 0.02, 2.8, 4);
+    addDualMesh(cableGeo, matMetal, matMetal, [x, 10.6, z], null, false, false);
+  });
+});
+
+// --- Wing flats (side offstage areas) ---
+[-10.2, 10.2].forEach((x, i) => {
+  const sign = i === 0 ? 1 : -1;
+  const flatGeo = new THREE.BoxGeometry(0.1, 5, 3);
+  const flatMat = new THREE.MeshLambertMaterial({ color: 0x181820, side: THREE.DoubleSide });
+  const flatMatW = new THREE.MeshLambertMaterial({ color: 0xD8D4CC, side: THREE.DoubleSide });
+  addDualMesh(flatGeo, flatMat, flatMatW, [x, 2.3, -2], null, false, false);
+});
+
+// --- Stage steps DSL and DSR ---
+[-1, 1].forEach((side, si) => {
+  const stepX = side * 8;
+  [0, 1, 2].forEach(step => {
+    const stepGeo = new THREE.BoxGeometry(2.5, 0.12, 0.5);
+    const stepMat = new THREE.MeshLambertMaterial({ color: 0x221810 });
+    const stepMatW = new THREE.MeshLambertMaterial({ color: 0xC0B090 });
+    addDualMesh(stepGeo, stepMat, stepMatW, [stepX, -0.12 * step, 7.2 + step * 0.55], null, false, true);
+  });
+});
+
+// --- Floor grid ---
+const gridDark  = new THREE.GridHelper(22, 22, 0x2a2a35, 0x1e1e28);
+const gridLight = new THREE.GridHelper(22, 22, 0xCCCCCC, 0xDDDDDD);
+gridDark.position.y  = 0.18;
+gridLight.position.y = 0.18;
+gridLight.visible = false;
+scene.add(gridDark);
+scene.add(gridLight);
+
+// Stage edge marker
+const edgeGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(22, 0.02, 13));
+const edgeMat = new THREE.LineBasicMaterial({ color: 0xFF6B00, opacity: 0.4, transparent: true });
+const edgeLines = new THREE.LineSegments(edgeGeo, edgeMat);
+edgeLines.position.y = 0.19;
+scene.add(edgeLines);
+
+// --- Ambient / fill light ---
+const ambient = new THREE.AmbientLight(0x111122, 0.4);
+scene.add(ambient);
+
+// Subtle fill from front of house
+const fillLight = new THREE.DirectionalLight(0x223355, 0.2);
+fillLight.position.set(0, 10, 20);
+scene.add(fillLight);
+
+// ======= STAGE VISIBILITY TOGGLE =======
+let stageVisible = true;
+
+function toggleStage() {
+  stageVisible = !stageVisible;
+  allStageMeshes.forEach(({ mesh }) => { mesh.visible = stageVisible; });
+  darkOnlyMeshes.forEach(m => { m.visible = stageVisible && !whiteBG; });
+  gridDark.visible  = stageVisible && !whiteBG;
+  gridLight.visible = stageVisible && whiteBG;
+  edgeLines.visible = stageVisible;
+  const btn = document.getElementById('stage-toggle-btn');
+  btn.textContent = stageVisible ? '🏛 Hide Stage' : '🏛 Show Stage';
+  btn.style.opacity = stageVisible ? '' : '0.5';
+}
+
+// ======= ORBIT CONTROLS (manual) =======
+let isOrbiting = false, isPanning = false;
+let mouseX = 0, mouseY = 0;
+let theta = 0.3, phi = 0.9, radius = 22;
+let targetX = 0, targetY = 1;
+
+viewport.addEventListener('mousedown', e => {
+  if (e.button === 0) isOrbiting = true;
+  if (e.button === 2) isPanning = true;
+  mouseX = e.clientX; mouseY = e.clientY;
+});
+
+window.addEventListener('mouseup', () => { isOrbiting = false; isPanning = false; });
+
+window.addEventListener('mousemove', e => {
+  if (!isOrbiting && !isPanning) return;
+  const dx = e.clientX - mouseX, dy = e.clientY - mouseY;
+  mouseX = e.clientX; mouseY = e.clientY;
+  if (isOrbiting) {
+    theta -= dx * 0.008;
+    phi = Math.max(0.1, Math.min(Math.PI * 0.48, phi - dy * 0.008));
+    updateCamera();
+  }
+  if (isPanning) {
+    targetX -= dx * 0.04;
+    targetY -= dy * 0.04;
+    updateCamera();
+  }
+});
+
+viewport.addEventListener('wheel', e => {
+  radius = Math.max(4, Math.min(50, radius + e.deltaY * 0.05));
+  updateCamera();
+});
+viewport.addEventListener('contextmenu', e => e.preventDefault());
+
+function updateCamera() {
+  camera.position.set(
+    targetX + radius * Math.sin(phi) * Math.sin(theta),
+    targetY + radius * Math.cos(phi),
+    radius * Math.sin(phi) * Math.cos(theta)
+  );
+  camera.lookAt(targetX, targetY, 0);
+}
+updateCamera();
+
+// ======= FIXTURE SYSTEM =======
+const fixtures = [];
+let selectedFixture = null;
+let fixtureCounter = 1;
+
+const fixtureConfigs = {
+  source4: {
+    label: 'Source Four® 19°',
+    color: 0xFFAA40,
+    beamAngle: 19,
+    intensity: 1.2,
+    isLight: true,
+    shape: 'leko',
+  },
+  'source4-26': {
+    label: 'Source Four® 26°',
+    color: 0xFFCC60,
+    beamAngle: 26,
+    intensity: 1.0,
+    isLight: true,
+    shape: 'leko',
+  },
+  source4par: {
+    label: 'Source Four® PAR',
+    color: 0xFFEE80,
+    beamAngle: 45,
+    intensity: 0.9,
+    isLight: true,
+    shape: 'par',
+  },
+  lustr: {
+    label: 'Lustr® X8',
+    color: 0xFF00FF,
+    beamAngle: 35,
+    intensity: 0.8,
+    isLight: true,
+    shape: 'led',
+  },
+  desire: {
+    label: 'Desire D60',
+    color: 0x4488FF,
+    beamAngle: 25,
+    intensity: 1.0,
+    isLight: true,
+    shape: 'profile',
+  },
+  movingyoke: {
+    label: 'ColorSource Spot',
+    color: 0xFF6600,
+    beamAngle: 20,
+    intensity: 1.1,
+    isLight: true,
+    shape: 'moving',
+  },
+  movingyoke2: {
+    label: 'ColorSource Par',
+    color: 0x4466FF,
+    beamAngle: 40,
+    intensity: 0.9,
+    isLight: true,
+    shape: 'movingwash',
+  },
+  truss: { label: 'Box Truss 3m', isLight: false, shape: 'truss' },
+  stand: { label: 'Light Stand', isLight: false, shape: 'stand' },
+  cycwall: { label: 'Cyc / Backdrop', isLight: false, shape: 'cycwall' },
+  box: { label: 'Prop Box', isLight: false, shape: 'box' },
+  person: { label: 'Performer Mark', isLight: false, shape: 'person' },
+  hazer: { label: 'MDG Hazer', isLight: false, shape: 'hazer', isHazer: true },
+};
+
+function buildFixtureMesh(type, config) {
+  const group = new THREE.Group();
+
+  if (config.shape === 'leko' || config.shape === 'profile') {
+    const bodyGeo = new THREE.CylinderGeometry(0.18, 0.25, 0.8, 8);
+    const bodyMat = new THREE.MeshLambertMaterial({ color: 0x222222 });
+    const body = new THREE.Mesh(bodyGeo, bodyMat);
+    body.rotation.x = Math.PI / 2;
+    group.add(body);
+
+    const lensGeo = new THREE.CylinderGeometry(0.22, 0.22, 0.06, 12);
+    const lensMat = new THREE.MeshLambertMaterial({ color: 0xFFCC80, emissive: 0xFFAA40, emissiveIntensity: 0.5 });
+    const lens = new THREE.Mesh(lensGeo, lensMat);
+    lens.rotation.x = Math.PI / 2;
+    lens.position.z = 0.43;
+    group.add(lens);
+  } else if (config.shape === 'par') {
+    const bodyGeo = new THREE.CylinderGeometry(0.22, 0.22, 0.5, 16);
+    const bodyMat = new THREE.MeshLambertMaterial({ color: 0x1a1a1a });
+    const body = new THREE.Mesh(bodyGeo, bodyMat);
+    body.rotation.x = Math.PI / 2;
+    group.add(body);
+    const lensGeo = new THREE.CylinderGeometry(0.22, 0.22, 0.04, 16);
+    const lensMat = new THREE.MeshLambertMaterial({ color: 0xFFEE80, emissive: 0xFFCC40, emissiveIntensity: 0.6 });
+    const lens = new THREE.Mesh(lensGeo, lensMat);
+    lens.rotation.x = Math.PI / 2;
+    lens.position.z = 0.27;
+    group.add(lens);
+  } else if (config.shape === 'led' || config.shape === 'movingwash') {
+    const bodyGeo = new THREE.BoxGeometry(0.5, 0.15, 0.3);
+    const bodyMat = new THREE.MeshLambertMaterial({ color: 0x111111 });
+    const body = new THREE.Mesh(bodyGeo, bodyMat);
+    group.add(body);
+    for (let i = -1; i <= 1; i++) {
+      const ledGeo = new THREE.CylinderGeometry(0.04, 0.04, 0.04, 8);
+      const c = config.color || 0xFF6B00;
+      const ledMat = new THREE.MeshLambertMaterial({ color: c, emissive: c, emissiveIntensity: 1.5 });
+      const led = new THREE.Mesh(ledGeo, ledMat);
+      led.rotation.x = Math.PI / 2;
+      led.position.set(i * 0.14, 0, 0.16);
+      group.add(led);
+    }
+  } else if (config.shape === 'moving') {
+    const baseGeo = new THREE.BoxGeometry(0.4, 0.2, 0.4);
+    const baseMat = new THREE.MeshLambertMaterial({ color: 0x1a1a1a });
+    const base = new THREE.Mesh(baseGeo, baseMat);
+    group.add(base);
+    const headGeo = new THREE.SphereGeometry(0.18, 10, 8);
+    const headMat = new THREE.MeshLambertMaterial({ color: 0x222222 });
+    const head = new THREE.Mesh(headGeo, headMat);
+    head.position.y = -0.28;
+    group.add(head);
+    const lensGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.03, 12);
+    const lensMat = new THREE.MeshLambertMaterial({ color: 0xFF8800, emissive: 0xFF6600, emissiveIntensity: 1 });
+    const lens = new THREE.Mesh(lensGeo, lensMat);
+    lens.rotation.x = Math.PI / 2;
+    lens.position.set(0, -0.28, 0.18);
+    group.add(lens);
+  } else if (config.shape === 'truss') {
+    const geo = new THREE.BoxGeometry(3, 0.2, 0.2);
+    const mat = new THREE.MeshLambertMaterial({ color: 0x888899 });
+    const m = new THREE.Mesh(geo, mat); group.add(m);
+    const geo2 = new THREE.BoxGeometry(3, 0.2, 0.2);
+    const m2 = new THREE.Mesh(geo2, mat); m2.position.y = -0.3; group.add(m2);
+  } else if (config.shape === 'stand') {
+    const poleGeo = new THREE.CylinderGeometry(0.04, 0.04, 4, 8);
+    const mat = new THREE.MeshLambertMaterial({ color: 0x888888 });
+    const pole = new THREE.Mesh(poleGeo, mat); group.add(pole);
+    const baseGeo = new THREE.CylinderGeometry(0.6, 0.8, 0.05, 3);
+    const base = new THREE.Mesh(baseGeo, mat);
+    base.position.y = -2; group.add(base);
+  } else if (config.shape === 'cycwall') {
+    const geo = new THREE.BoxGeometry(6, 4, 0.1);
+    const mat = new THREE.MeshLambertMaterial({ color: 0x334455, side: THREE.DoubleSide });
+    const m = new THREE.Mesh(geo, mat); group.add(m);
+  } else if (config.shape === 'box') {
+    const geo = new THREE.BoxGeometry(1, 1, 1);
+    const mat = new THREE.MeshLambertMaterial({ color: 0x556633 });
+    const m = new THREE.Mesh(geo, mat);
+    m.castShadow = true; m.receiveShadow = true;
+    group.add(m);
+  } else if (config.shape === 'person') {
+    const bodyGeo = new THREE.CylinderGeometry(0.18, 0.22, 1.2, 8);
+    const bodyMat = new THREE.MeshLambertMaterial({ color: 0x334466 });
+    const body = new THREE.Mesh(bodyGeo, bodyMat);
+    body.position.y = 0.6;
+    group.add(body);
+    const headGeo = new THREE.SphereGeometry(0.18, 8, 8);
+    const headMat = new THREE.MeshLambertMaterial({ color: 0xFFB980 });
+    const head = new THREE.Mesh(headGeo, headMat);
+    head.position.y = 1.45;
+    group.add(head);
+  } else if (config.shape === 'hazer') {
+    // Main body box
+    const bodyGeo = new THREE.BoxGeometry(1.4, 0.5, 0.7);
+    const bodyMat = new THREE.MeshLambertMaterial({ color: 0x1a1e22 });
+    const body = new THREE.Mesh(bodyGeo, bodyMat);
+    group.add(body);
+    // Nozzle
+    const nozzleGeo = new THREE.CylinderGeometry(0.08, 0.12, 0.3, 10);
+    const nozzleMat = new THREE.MeshLambertMaterial({ color: 0x333344 });
+    const nozzle = new THREE.Mesh(nozzleGeo, nozzleMat);
+    nozzle.rotation.z = Math.PI / 2;
+    nozzle.position.set(0.85, 0, 0);
+    group.add(nozzle);
+    // Vents
+    for (let i = -1; i <= 1; i += 2) {
+      const ventGeo = new THREE.BoxGeometry(0.8, 0.06, 0.5);
+      const ventMat = new THREE.MeshLambertMaterial({ color: 0x111118 });
+      const vent = new THREE.Mesh(ventGeo, ventMat);
+      vent.position.set(0, i * 0.28, 0);
+      group.add(vent);
+    }
+    // Status LED
+    const ledGeo = new THREE.SphereGeometry(0.04, 6, 6);
+    const ledMat = new THREE.MeshLambertMaterial({ color: 0x00AAFF, emissive: 0x0066FF, emissiveIntensity: 2 });
+    const led = new THREE.Mesh(ledGeo, ledMat);
+    led.position.set(-0.5, 0.28, 0.2);
+    group.add(led);
+  }
+
+  return group;
+}
+
+function addSpotlight(config, group) {
+  const color = config.color || 0xFFAA40;
+  const angle = THREE.MathUtils.degToRad((config.beamAngle || 30) / 2);
+  const spot = new THREE.SpotLight(color, config.intensity || 1, 25, angle, 0.15, 1.5);
+  spot.castShadow = true;
+  spot.shadow.mapSize.width = 512;
+  spot.shadow.mapSize.height = 512;
+  spot.shadow.camera.near = 0.5;
+  spot.shadow.camera.far = 25;
+  const target = new THREE.Object3D();
+  target.position.set(0, -10, 0);
+  group.add(target);
+  spot.target = target;
+  group.add(spot);
+  return spot;
+}
+
+function buildBeam(config) {
+  const beamAngle = config.beamAngle || 30;
+  const beamLength = 9.5;
+  const topR = 0.08;
+  const bottomR = Math.tan(THREE.MathUtils.degToRad(beamAngle / 2)) * beamLength;
+  const segments = 32;
+
+  // Outer cone - the visible beam volume
+  const coneGeo = new THREE.CylinderGeometry(bottomR, topR, beamLength, segments, 6, true);
+  const col = new THREE.Color(config.color || 0xFFAA40);
+
+  const coneMat = new THREE.MeshBasicMaterial({
+    color: col,
+    transparent: true,
+    opacity: 0.13,
+    side: THREE.FrontSide,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  });
+  const cone = new THREE.Mesh(coneGeo, coneMat);
+  // Cylinder in Three.js goes along Y; we want it pointing along +Z (local, pointing "out of fixture")
+  // The fixture group is rotated PI on X so "forward" is -Y world = downward. Cone sits below origin.
+  cone.rotation.x = Math.PI / 2; // now cone axis is along local Z
+  cone.position.z = beamLength / 2 + 0.1; // push forward from lens
+  cone.renderOrder = 1;
+
+  // Inner bright core
+  const coreGeo = new THREE.CylinderGeometry(bottomR * 0.35, topR * 0.5, beamLength, segments, 1, true);
+  const coreMat = new THREE.MeshBasicMaterial({
+    color: col,
+    transparent: true,
+    opacity: 0.22,
+    side: THREE.FrontSide,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  });
+  const core = new THREE.Mesh(coreGeo, coreMat);
+  core.rotation.x = Math.PI / 2;
+  core.position.z = beamLength / 2 + 0.1;
+  core.renderOrder = 2;
+
+  // Pool of light on floor (circle)
+  const poolR = bottomR * 1.1;
+  const poolGeo = new THREE.CircleGeometry(poolR, 48);
+  const poolMat = new THREE.MeshBasicMaterial({
+    color: col,
+    transparent: true,
+    opacity: 0.28,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  });
+  const pool = new THREE.Mesh(poolGeo, poolMat);
+  pool.renderOrder = 3;
+  // pool position is set in world-space each frame; attach to scene separately
+  pool._isPool = true;
+
+  const beamGroup = new THREE.Group();
+  beamGroup.add(cone);
+  beamGroup.add(core);
+  beamGroup._cone = cone;
+  beamGroup._core = core;
+  beamGroup._coneMat = coneMat;
+  beamGroup._coreMat = coreMat;
+  beamGroup._poolMesh = pool;
+  beamGroup._poolMat = poolMat;
+  beamGroup._beamLength = beamLength;
+
+  return beamGroup;
+}
+
+function spawnFixture(type, worldX, worldZ) {
+  const config = fixtureConfigs[type];
+  if (!config) return;
+
+  const group = buildFixtureMesh(type, config);
+
+  // Default heights
+  const defaultY = config.isLight ? 7.5 :
+    config.shape === 'stand' ? 2 :
+    config.shape === 'cycwall' ? 2 :
+    config.shape === 'box' ? 0.5 :
+    config.shape === 'person' ? 0 :
+    config.shape === 'hazer' ? 0.25 : 0;
+
+  group.position.set(worldX, defaultY, worldZ);
+
+  let spotLight = null;
+  let beamGroup = null;
+  let hazerCloud = null;
+  if (config.isLight) {
+    spotLight = addSpotlight(config, group);
+    group.rotation.x = Math.PI;
+    beamGroup = buildBeam(config);
+    group.add(beamGroup);
+    scene.add(beamGroup._poolMesh);
+  }
+  if (config.isHazer) {
+    hazerCloud = buildHazerCloud();
+    hazerCloud.position.set(worldX, 1.5, worldZ);
+    scene.add(hazerCloud);
+  }
+
+  scene.add(group);
+
+  const id = fixtureCounter++;
+  const f = {
+    id, type, config,
+    group, spotLight, beamGroup, hazerCloud,
+    name: `${config.label} #${id}`,
+    intensity: 100,
+    color: '#' + new THREE.Color(config.color || 0xFFAA40).getHexString(),
+    panAngle: 0, tiltAngle: -90,
+    channel: id,
+    hazeIntensity: 60,
+  };
+  fixtures.push(f);
+  addChannel(f);
+  hideDrop();
+  // If already in white/drafting mode, desaturate the new fixture immediately
+  if (whiteBG) desaturateFixtures();
+  selectFixture(f);
+  return f;
+}
+
+// ======= HAZER CLOUD SYSTEM =======
+function buildHazerCloud() {
+  const group = new THREE.Group();
+  const pCount = 28;
+  for (let i = 0; i < pCount; i++) {
+    const r = 0.8 + Math.random() * 3.5;
+    const geo = new THREE.SphereGeometry(r, 7, 5);
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0xCCDDEE,
+      transparent: true,
+      opacity: 0.018 + Math.random() * 0.022,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+    const m = new THREE.Mesh(geo, mat);
+    m.position.set(
+      (Math.random() - 0.5) * 14,
+      (Math.random()) * 3.5,
+      (Math.random() - 0.5) * 8
+    );
+    m._baseOpacity = mat.opacity;
+    m._drift = new THREE.Vector3(
+      (Math.random() - 0.5) * 0.003,
+      (Math.random()) * 0.001,
+      (Math.random() - 0.5) * 0.003
+    );
+    m._phase = Math.random() * Math.PI * 2;
+    group.add(m);
+  }
+  group._particles = group.children.slice();
+  group._hazeLevel = 0.6;
+  return group;
+}
+
+function updateHazerCloud(cloud, hazeLevel, t) {
+  if (!cloud) return;
+  cloud._particles.forEach((p, i) => {
+    const alpha = hazeLevel * p._baseOpacity * (0.8 + 0.2 * Math.sin(t * 0.3 + p._phase));
+    p.material.opacity = alpha;
+    p.position.x += p._drift.x;
+    p.position.z += p._drift.z;
+    p.position.y += p._drift.y * 0.5;
+    // Gentle wraparound
+    if (p.position.x > 12) p.position.x = -12;
+    if (p.position.x < -12) p.position.x = 12;
+    if (p.position.z > 8) p.position.z = -8;
+    if (p.position.z < -8) p.position.z = 8;
+    if (p.position.y > 5) p.position.y = 0.2;
+  });
+}
+
+// ======= RAYCASTING / CLICK TO SELECT =======
+const raycaster = new THREE.Raycaster();
+const mouse2D = new THREE.Vector2();
+let draggingFixture = null;
+let dragOffset = new THREE.Vector3();
+
+viewport.addEventListener('click', e => {
+  if (e.target !== canvas) return;
+  const rect = viewport.getBoundingClientRect();
+  mouse2D.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+  mouse2D.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+  raycaster.setFromCamera(mouse2D, camera);
+
+  const objects = fixtures.map(f => f.group).flatMap(g => {
+    const meshes = [];
+    g.traverse(c => { if (c.isMesh) meshes.push(c); });
+    return meshes;
+  });
+
+  const hits = raycaster.intersectObjects(objects);
+  if (hits.length > 0) {
+    const hit = hits[0].object;
+    const found = fixtures.find(f => {
+      let found = false;
+      f.group.traverse(c => { if (c === hit) found = true; });
+      return found;
+    });
+    if (found) { selectFixture(found); return; }
+  }
+  deselectFixture();
+});
+
+// ======= DRAG FIXTURES IN 3D =======
+const dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+let isDragging3D = false;
+let drag3DFixture = null;
+
+viewport.addEventListener('mousedown', e => {
+  if (e.button !== 0) return;
+  const rect = viewport.getBoundingClientRect();
+  mouse2D.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+  mouse2D.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+  raycaster.setFromCamera(mouse2D, camera);
+
+  const objects = fixtures.map(f => f.group).flatMap(g => {
+    const meshes = [];
+    g.traverse(c => { if (c.isMesh) meshes.push(c); });
+    return meshes;
+  });
+  const hits = raycaster.intersectObjects(objects);
+  if (hits.length > 0) {
+    const hit = hits[0].object;
+    const found = fixtures.find(f => {
+      let found = false;
+      f.group.traverse(c => { if (c === hit) found = true; });
+      return found;
+    });
+    if (found) {
+      isDragging3D = true;
+      drag3DFixture = found;
+      isOrbiting = false;
+      e.stopPropagation();
+    }
+  }
+});
+
+window.addEventListener('mousemove', e => {
+  if (!isDragging3D || !drag3DFixture) return;
+  const rect = viewport.getBoundingClientRect();
+  mouse2D.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+  mouse2D.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+  raycaster.setFromCamera(mouse2D, camera);
+
+  dragPlane.constant = -drag3DFixture.group.position.y;
+  const pt = new THREE.Vector3();
+  raycaster.ray.intersectPlane(dragPlane, pt);
+  if (pt) {
+    drag3DFixture.group.position.x = Math.max(-11, Math.min(11, pt.x));
+    drag3DFixture.group.position.z = Math.max(-7, Math.min(7, pt.z));
+  }
+});
+
+window.addEventListener('mouseup', () => {
+  isDragging3D = false;
+  drag3DFixture = null;
+});
+
+// ======= SELECTION =======
+const selectionOutline = new THREE.BoxHelper(new THREE.Object3D(), 0xFF6B00);
+selectionOutline.visible = false;
+scene.add(selectionOutline);
+
+function selectFixture(f) {
+  selectedFixture = f;
+  selectionOutline.setFromObject(f.group);
+  selectionOutline.visible = true;
+  updatePropertiesPanel(f);
+  openGizmo(f);
+}
+
+function deselectFixture() {
+  selectedFixture = null;
+  selectionOutline.visible = false;
+  closeGizmo();
+  document.getElementById('prop-content').innerHTML = `
+    <div class="no-selection">
+      <div class="no-selection-icon">⬡</div>
+      <div class="no-selection-text">Select a fixture<br>to edit properties</div>
+    </div>`;
+}
+
+function updatePropertiesPanel(f) {
+  const colorHex = f.color || '#ffaa40';
+  document.getElementById('prop-content').innerHTML = `
+    <div class="prop-section">
+      <div class="selected-fixture-header">
+        <div>
+          <div class="selected-fixture-name">${f.name}</div>
+          <div class="selected-fixture-type">${f.config.label}</div>
+        </div>
+      </div>
+      <button class="delete-btn" onclick="deleteSelected()">✕ Delete Fixture</button>
+    </div>
+
+    ${f.config.isLight ? `
+    <div class="prop-section">
+      <div class="prop-label">Light Controls</div>
+      <div class="prop-row">
+        <div class="prop-name">Intensity</div>
+        <div class="prop-control">
+          <input type="range" min="0" max="100" value="${f.intensity}"
+            oninput="setIntensity(this.value, this)" id="prop-intensity">
+        </div>
+        <div class="prop-value" id="val-intensity">${f.intensity}%</div>
+      </div>
+      <div class="prop-row">
+        <div class="prop-name">Color</div>
+        <div class="prop-control">
+          <input type="color" value="${colorHex}" oninput="setColor(this.value)" id="prop-color">
+        </div>
+      </div>
+      <div class="prop-row">
+        <div class="prop-name">Pan</div>
+        <div class="prop-control">
+          <input type="range" min="-180" max="180" value="${f.panAngle}"
+            oninput="setPan(this.value, this)">
+        </div>
+        <div class="prop-value" id="val-pan">${f.panAngle}°</div>
+      </div>
+      <div class="prop-row">
+        <div class="prop-name">Tilt</div>
+        <div class="prop-control">
+          <input type="range" min="-180" max="0" value="${f.tiltAngle}"
+            oninput="setTilt(this.value, this)">
+        </div>
+        <div class="prop-value" id="val-tilt">${f.tiltAngle}°</div>
+      </div>
+    </div>` : ''}
+
+    ${f.config.isHazer ? `
+    <div class="prop-section">
+      <div class="prop-label">Hazer Controls</div>
+      <div class="prop-row">
+        <div class="prop-name">Output</div>
+        <div class="prop-control">
+          <input type="range" min="0" max="100" value="${f.hazeIntensity || 60}"
+            oninput="setHazeIntensity(this.value)" id="prop-haze">
+        </div>
+        <div class="prop-value" id="val-haze">${f.hazeIntensity || 60}%</div>
+      </div>
+      <div class="prop-row" style="margin-top:4px">
+        <div class="prop-name" style="font-size:10px;color:#88AACC">Status</div>
+        <div style="font-family:'Barlow Condensed';font-size:11px;color:#55AAFF;letter-spacing:0.08em">● HAZE ACTIVE</div>
+      </div>
+    </div>` : ''}
+
+    <div class="prop-section">
+      <div class="prop-label">Rotation</div>
+      <div class="prop-row">
+        <div class="prop-name">Rotate Y</div>
+        <div class="prop-control">
+          <input type="range" min="-180" max="180" step="1"
+            value="${Math.round(THREE.MathUtils.radToDeg(f.group.rotation.y))}"
+            oninput="setRotY(this.value, this)">
+        </div>
+        <div class="prop-value" id="val-roty">${Math.round(THREE.MathUtils.radToDeg(f.group.rotation.y))}°</div>
+      </div>
+    </div>
+
+    <div class="prop-section" style="padding:10px 16px">
+      <div class="prop-label" style="margin-bottom:6px">3D Gizmo</div>
+      <div style="font-size:10px;color:var(--etc-muted);letter-spacing:0.05em;line-height:1.8">
+        <span style="color:#55FF88">●</span> Green ring → Pan (Y)<br>
+        <span style="color:#FF5555">●</span> Red ring → Tilt (X)<br>
+        <span style="color:#5599FF">●</span> Blue ring → Roll (Z)<br>
+        <span style="color:#FF5555">━</span><span style="color:#55FF88">━</span><span style="color:#5599FF">━</span> Arrows → Move XYZ
+      </div>
+    </div>
+  `;
+}
+
+function setPosition(axis, val, el) {
+  if (!selectedFixture) return;
+  selectedFixture.group.position[axis] = parseFloat(val);
+  document.getElementById(`val-pos-${axis}`).textContent = parseFloat(val).toFixed(1);
+  selectionOutline.setFromObject(selectedFixture.group);
+}
+
+function setIntensity(val, el) {
+  if (!selectedFixture || !selectedFixture.spotLight) return;
+  selectedFixture.intensity = parseInt(val);
+  selectedFixture.spotLight.intensity = (val / 100) * (selectedFixture.config.intensity || 1) * 2;
+  document.getElementById('val-intensity').textContent = val + '%';
+  updateChannel(selectedFixture);
+}
+
+function setColor(val) {
+  if (!selectedFixture || !selectedFixture.spotLight) return;
+  selectedFixture.color = val;
+  const c = new THREE.Color(val);
+  selectedFixture.spotLight.color = c;
+  // Update emissive on lens mesh
+  selectedFixture.group.traverse(child => {
+    if (child.isMesh && child.material.emissive) {
+      child.material.emissive = c;
+    }
+  });
+  // Update beam color
+  if (selectedFixture.beamGroup) {
+    selectedFixture.beamGroup._coneMat.color = c;
+    selectedFixture.beamGroup._coreMat.color = c;
+    selectedFixture.beamGroup._poolMat.color = c;
+  }
+}
+
+function setPan(val, el) {
+  if (!selectedFixture) return;
+  selectedFixture.panAngle = parseFloat(val);
+  selectedFixture.group.rotation.y = THREE.MathUtils.degToRad(parseFloat(val));
+  document.getElementById('val-pan').textContent = val + '°';
+}
+
+function setTilt(val, el) {
+  if (!selectedFixture) return;
+  selectedFixture.tiltAngle = parseFloat(val);
+  // Tilt is applied as group X rotation
+  selectedFixture.group.rotation.x = THREE.MathUtils.degToRad(parseFloat(val)) + Math.PI;
+  document.getElementById('val-tilt').textContent = val + '°';
+}
+
+function setRotY(val, el) {
+  if (!selectedFixture) return;
+  selectedFixture.group.rotation.y = THREE.MathUtils.degToRad(parseFloat(val));
+  document.getElementById('val-roty').textContent = val + '°';
+}
+
+function setHazeIntensity(val) {
+  if (!selectedFixture || !selectedFixture.hazerCloud) return;
+  selectedFixture.hazeIntensity = parseInt(val);
+  selectedFixture.hazerCloud._hazeLevel = val / 100;
+  document.getElementById('val-haze').textContent = val + '%';
+}
+
+// ======= XYZ GIZMO =======
+// ======= 3D IN-SCENE TRANSFORM GIZMO =======
+// Three rings (pan=Y, tilt=X, roll=Z) + three move arrows, wraps around selected fixture
+
+const gizmoGroup = new THREE.Group();
+gizmoGroup.visible = false;
+scene.add(gizmoGroup);
+
+const GIZMO_R = 1.6;       // ring radius
+const GIZMO_TUBE = 0.045;  // tube thickness
+const GIZMO_SEGS = 64;
+const ARROW_LEN = 2.2;
+const ARROW_HEAD = 0.18;
+
+// Ring materials
+const matPan  = new THREE.MeshBasicMaterial({ color: 0x55FF88, transparent: true, opacity: 0.85, depthTest: false, side: THREE.DoubleSide });
+const matTilt = new THREE.MeshBasicMaterial({ color: 0xFF5555, transparent: true, opacity: 0.85, depthTest: false, side: THREE.DoubleSide });
+const matRoll = new THREE.MeshBasicMaterial({ color: 0x5599FF, transparent: true, opacity: 0.85, depthTest: false, side: THREE.DoubleSide });
+
+// Arrow materials
+const matMoveX = new THREE.MeshBasicMaterial({ color: 0xFF5555, transparent: true, opacity: 0.9, depthTest: false });
+const matMoveY = new THREE.MeshBasicMaterial({ color: 0x55FF88, transparent: true, opacity: 0.9, depthTest: false });
+const matMoveZ = new THREE.MeshBasicMaterial({ color: 0x5599FF, transparent: true, opacity: 0.9, depthTest: false });
+
+// Highlight materials
+const matPanHi  = new THREE.MeshBasicMaterial({ color: 0xAAFFCC, transparent: true, opacity: 1.0, depthTest: false, side: THREE.DoubleSide });
+const matTiltHi = new THREE.MeshBasicMaterial({ color: 0xFFAAAA, transparent: true, opacity: 1.0, depthTest: false, side: THREE.DoubleSide });
+const matRollHi = new THREE.MeshBasicMaterial({ color: 0xAABBFF, transparent: true, opacity: 1.0, depthTest: false, side: THREE.DoubleSide });
+const matMoveXHi = new THREE.MeshBasicMaterial({ color: 0xFFAAAA, transparent: true, opacity: 1.0, depthTest: false });
+const matMoveYHi = new THREE.MeshBasicMaterial({ color: 0xAAFFCC, transparent: true, opacity: 1.0, depthTest: false });
+const matMoveZHi = new THREE.MeshBasicMaterial({ color: 0xAABBFF, transparent: true, opacity: 1.0, depthTest: false });
+
+function makeTorus(mat, rx, ry, rz) {
+  const geo = new THREE.TorusGeometry(GIZMO_R, GIZMO_TUBE, 8, GIZMO_SEGS);
+  const m = new THREE.Mesh(geo, mat);
+  m.rotation.set(rx, ry, rz);
+  m.renderOrder = 10;
+  return m;
+}
+
+function makeArrow(mat, dir, len) {
+  const g = new THREE.Group();
+  // Shaft
+  const shaftGeo = new THREE.CylinderGeometry(0.025, 0.025, len - ARROW_HEAD, 8);
+  const shaft = new THREE.Mesh(shaftGeo, mat);
+  shaft.position.y = (len - ARROW_HEAD) / 2;
+  shaft.renderOrder = 10;
+  g.add(shaft);
+  // Head
+  const headGeo = new THREE.ConeGeometry(ARROW_HEAD, ARROW_HEAD * 2, 8);
+  const head = new THREE.Mesh(headGeo, mat);
+  head.position.y = len - ARROW_HEAD;
+  head.renderOrder = 10;
+  g.add(head);
+  // Orient
+  if (dir === 'x') g.rotation.z = -Math.PI / 2;
+  else if (dir === 'z') g.rotation.x = Math.PI / 2;
+  return g;
+}
+
+// Build rings
+const ringPan  = makeTorus(matPan,  Math.PI / 2, 0, 0);          // horizontal flat ring → pan around Y
+const ringTilt = makeTorus(matTilt, 0, Math.PI / 2, 0);           // upright ring facing Z → tilt around X  
+const ringRoll = makeTorus(matRoll, 0, 0, Math.PI / 2);           // upright ring facing X → roll around Z
+
+// Build move arrows (positive direction only)
+const arrowX = makeArrow(matMoveX, 'x', ARROW_LEN);
+const arrowY = makeArrow(matMoveY, 'y', ARROW_LEN);
+const arrowZ = makeArrow(matMoveZ, 'z', ARROW_LEN);
+
+gizmoGroup.add(ringPan, ringTilt, ringRoll, arrowX, arrowY, arrowZ);
+
+// Tag each piece for hit-testing
+ringPan._gizmoType  = 'pan';
+ringTilt._gizmoType = 'tilt';
+ringRoll._gizmoType = 'roll';
+arrowX.children.forEach(c => c._gizmoType = 'moveX');
+arrowY.children.forEach(c => c._gizmoType = 'moveY');
+arrowZ.children.forEach(c => c._gizmoType = 'moveZ');
+
+// All gizmo meshes for raycasting
+function allGizmoMeshes() {
+  const arr = [];
+  gizmoGroup.traverse(c => { if (c.isMesh) arr.push(c); });
+  return arr;
+}
+
+let gizmoActive = false;
+let activeGizmoType = null;  // 'pan','tilt','roll','moveX','moveY','moveZ'
+let gizmoMouseStart = { x: 0, y: 0 };
+let gizmoStartValue = 0;
+
+function openGizmo(f) {
+  gizmoGroup.position.copy(f.group.position);
+  gizmoGroup.visible = true;
+  gizmoActive = true;
+}
+
+function closeGizmo() {
+  gizmoGroup.visible = false;
+  gizmoActive = false;
+  activeGizmoType = null;
+  resetGizmoHighlights();
+}
+
+function resetGizmoHighlights() {
+  ringPan.material  = matPan;
+  ringTilt.material = matTilt;
+  ringRoll.material = matRoll;
+  arrowX.children.forEach(c => c.material = matMoveX);
+  arrowY.children.forEach(c => c.material = matMoveY);
+  arrowZ.children.forEach(c => c.material = matMoveZ);
+}
+
+function highlightGizmo(type) {
+  resetGizmoHighlights();
+  if (type === 'pan')   ringPan.material  = matPanHi;
+  if (type === 'tilt')  ringTilt.material = matTiltHi;
+  if (type === 'roll')  ringRoll.material = matRollHi;
+  if (type === 'moveX') arrowX.children.forEach(c => c.material = matMoveXHi);
+  if (type === 'moveY') arrowY.children.forEach(c => c.material = matMoveYHi);
+  if (type === 'moveZ') arrowZ.children.forEach(c => c.material = matMoveZHi);
+}
+
+// Hover highlight
+viewport.addEventListener('mousemove', e => {
+  if (activeGizmoType || !gizmoActive) return;
+  const rect = viewport.getBoundingClientRect();
+  const nx = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+  const ny = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+  const rc = new THREE.Raycaster();
+  rc.setFromCamera(new THREE.Vector2(nx, ny), camera);
+  const hits = rc.intersectObjects(allGizmoMeshes());
+  if (hits.length > 0) {
+    highlightGizmo(hits[0].object._gizmoType);
+    viewport.style.cursor = 'grab';
+  } else {
+    resetGizmoHighlights();
+    viewport.style.cursor = '';
+  }
+});
+
+// Mousedown on gizmo
+viewport.addEventListener('mousedown', e => {
+  if (!gizmoActive || !selectedFixture || e.button !== 0) return;
+  const rect = viewport.getBoundingClientRect();
+  const nx = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+  const ny = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+  const rc = new THREE.Raycaster();
+  rc.setFromCamera(new THREE.Vector2(nx, ny), camera);
+  const hits = rc.intersectObjects(allGizmoMeshes());
+  if (hits.length > 0) {
+    activeGizmoType = hits[0].object._gizmoType;
+    gizmoMouseStart = { x: e.clientX, y: e.clientY };
+    const f = selectedFixture;
+    if (activeGizmoType === 'pan')   gizmoStartValue = f.group.rotation.y;
+    if (activeGizmoType === 'tilt')  gizmoStartValue = f.tiltAngle;
+    if (activeGizmoType === 'roll')  gizmoStartValue = f.group.rotation.z;
+    if (activeGizmoType === 'moveX') gizmoStartValue = f.group.position.x;
+    if (activeGizmoType === 'moveY') gizmoStartValue = f.group.position.y;
+    if (activeGizmoType === 'moveZ') gizmoStartValue = f.group.position.z;
+    highlightGizmo(activeGizmoType);
+    viewport.style.cursor = 'grabbing';
+    isOrbiting = false;
+    isDragging3D = false;
+    e.stopPropagation();
+  }
+});
+
+window.addEventListener('mousemove', e => {
+  if (!activeGizmoType || !selectedFixture) return;
+  const dx = e.clientX - gizmoMouseStart.x;
+  const dy = e.clientY - gizmoMouseStart.y;
+  const f = selectedFixture;
+  const sensitivity = 0.008;
+
+  if (activeGizmoType === 'pan') {
+    // Invert dx so dragging right = turning right from above
+    f.group.rotation.y = gizmoStartValue - dx * sensitivity * 2;
+    f.panAngle = Math.round(THREE.MathUtils.radToDeg(f.group.rotation.y));
+    const el = document.getElementById('val-pan');
+    if (el) el.textContent = f.panAngle + '°';
+  }
+  if (activeGizmoType === 'tilt') {
+    // dy: drag up (negative dy) = tilt beam forward/down
+    const newTilt = Math.max(-180, Math.min(0, gizmoStartValue + dy * sensitivity * 80));
+    f.tiltAngle = Math.round(newTilt);
+    f.group.rotation.x = THREE.MathUtils.degToRad(newTilt) + Math.PI;
+    const el = document.getElementById('val-tilt');
+    if (el) el.textContent = f.tiltAngle + '°';
+  }
+  if (activeGizmoType === 'roll') {
+    // dx: drag right = roll clockwise
+    f.group.rotation.z = gizmoStartValue - dx * sensitivity * 2;
+  }
+  if (activeGizmoType === 'moveX') {
+    f.group.position.x = Math.max(-11, Math.min(11, gizmoStartValue + dx * 0.04));
+  }
+  if (activeGizmoType === 'moveY') {
+    f.group.position.y = Math.max(0, Math.min(12, gizmoStartValue - dy * 0.04));
+    if (f.hazerCloud) f.hazerCloud.position.y = f.group.position.y + 1.0;
+  }
+  if (activeGizmoType === 'moveZ') {
+    f.group.position.z = Math.max(-7, Math.min(7, gizmoStartValue + dy * 0.04));
+    if (f.hazerCloud) f.hazerCloud.position.z = f.group.position.z;
+  }
+
+  // Keep gizmo tracking fixture
+  gizmoGroup.position.copy(f.group.position);
+  selectionOutline.setFromObject(f.group);
+});
+
+window.addEventListener('mouseup', () => {
+  if (activeGizmoType) {
+    activeGizmoType = null;
+    viewport.style.cursor = '';
+    resetGizmoHighlights();
+  }
+});
+
+function deleteSelected() {
+  if (!selectedFixture) return;
+  scene.remove(selectedFixture.group);
+  if (selectedFixture.beamGroup && selectedFixture.beamGroup._poolMesh) {
+    scene.remove(selectedFixture.beamGroup._poolMesh);
+  }
+  if (selectedFixture.hazerCloud) scene.remove(selectedFixture.hazerCloud);
+  const idx = fixtures.indexOf(selectedFixture);
+  if (idx > -1) fixtures.splice(idx, 1);
+  removeChannel(selectedFixture.channel);
+  closeGizmo();
+  deselectFixture();
+  selectionOutline.visible = false;
+  if (fixtures.length === 0) showDrop();
+}
+
+// ======= DROP FROM LIBRARY =======
+let draggingType = null, draggingName = null;
+
+document.querySelectorAll('.fixture-item').forEach(item => {
+  item.addEventListener('dragstart', e => {
+    draggingType = item.dataset.type;
+    draggingName = item.dataset.name;
+    item.classList.add('dragging');
+    const ghost = document.getElementById('drag-ghost');
+    ghost.style.display = 'block';
+    e.dataTransfer.effectAllowed = 'copy';
+    e.dataTransfer.setDragImage(new Image(), 0, 0);
+  });
+  item.addEventListener('dragend', () => {
+    item.classList.remove('dragging');
+    document.getElementById('drag-ghost').style.display = 'none';
+    draggingType = null;
+  });
+});
+
+document.addEventListener('dragover', e => {
+  e.preventDefault();
+  const ghost = document.getElementById('drag-ghost');
+  ghost.style.left = e.clientX + 'px';
+  ghost.style.top = e.clientY + 'px';
+});
+
+viewport.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
+
+viewport.addEventListener('drop', e => {
+  e.preventDefault();
+  if (!draggingType) return;
+  const rect = viewport.getBoundingClientRect();
+  const nx = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+  const ny = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+  raycaster.setFromCamera(new THREE.Vector2(nx, ny), camera);
+  const floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+  const dropPt = new THREE.Vector3();
+  raycaster.ray.intersectPlane(floorPlane, dropPt);
+
+  const wx = Math.max(-11, Math.min(11, dropPt.x));
+  const wz = Math.max(-7, Math.min(7, dropPt.z));
+  spawnFixture(draggingType, wx, wz);
+});
+
+// ======= CHANNEL STRIP =======
+const channelData = {};
+
+function addChannel(f) {
+  const strip = document.getElementById('channel-strip');
+  const div = document.createElement('div');
+  div.className = 'channel';
+  div.id = `ch-${f.channel}`;
+  div.innerHTML = `
+    <div class="channel-val" id="chval-${f.channel}">${f.intensity}</div>
+    <div class="channel-fader-track" id="track-${f.channel}">
+      <div class="channel-fader-fill" id="fill-${f.channel}" style="height:${f.intensity}%"></div>
+      <div class="channel-fader-handle" id="handle-${f.channel}" style="bottom:calc(${f.intensity}% - 4px)"></div>
+    </div>
+    <div class="channel-num">${f.channel}</div>
+  `;
+  strip.appendChild(div);
+  channelData[f.channel] = f;
+  setupFaderDrag(f.channel);
+  div.addEventListener('click', () => selectFixture(f));
+}
+
+function setupFaderDrag(ch) {
+  const track = document.getElementById(`track-${ch}`);
+  if (!track) return;
+  let dragging = false, startY = 0, startVal = 0;
+  track.addEventListener('mousedown', e => {
+    dragging = true; startY = e.clientY;
+    startVal = channelData[ch] ? channelData[ch].intensity : 100;
+    e.stopPropagation();
+  });
+  window.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const dy = startY - e.clientY;
+    const f = channelData[ch];
+    if (!f) return;
+    const newVal = Math.max(0, Math.min(100, startVal + dy * 0.8));
+    f.intensity = Math.round(newVal);
+    if (f.spotLight) f.spotLight.intensity = (newVal / 100) * (f.config.intensity || 1) * 2;
+    updateChannel(f);
+    if (selectedFixture && selectedFixture.channel === ch) {
+      const el = document.getElementById('prop-intensity');
+      if (el) el.value = f.intensity;
+      const vel = document.getElementById('val-intensity');
+      if (vel) vel.textContent = f.intensity + '%';
+    }
+  });
+  window.addEventListener('mouseup', () => { dragging = false; });
+}
+
+function updateChannel(f) {
+  const fill = document.getElementById(`fill-${f.channel}`);
+  const handle = document.getElementById(`handle-${f.channel}`);
+  const val = document.getElementById(`chval-${f.channel}`);
+  if (fill) fill.style.height = f.intensity + '%';
+  if (handle) handle.style.bottom = `calc(${f.intensity}% - 4px)`;
+  if (val) val.textContent = f.intensity;
+}
+
+function removeChannel(ch) {
+  const el = document.getElementById(`ch-${ch}`);
+  if (el) el.remove();
+  delete channelData[ch];
+}
+
+// ======= DROP HINT =======
+function hideDrop() { document.getElementById('drop-hint').classList.add('hidden'); }
+function showDrop() { document.getElementById('drop-hint').classList.remove('hidden'); }
+
+// ======= VIEWS =======
+function setView(v) {
+  document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+  if (v === 'perspective') { theta = 0.3; phi = 0.9; radius = 22; targetX = 0; targetY = 1; }
+  else if (v === 'top') { theta = 0; phi = 0.02; radius = 24; targetX = 0; targetY = 0; }
+  else if (v === 'front') { theta = 0; phi = Math.PI / 2 - 0.01; radius = 22; targetX = 0; targetY = 3; }
+  else if (v === 'side') { theta = Math.PI / 2; phi = Math.PI / 2 - 0.01; radius = 22; targetX = 0; targetY = 3; }
+  updateCamera();
+}
+
+function resetCamera() { theta = 0.3; phi = 0.9; radius = 22; targetX = 0; targetY = 1; updateCamera(); }
+
+function clearAll() {
+  fixtures.forEach(f => {
+    scene.remove(f.group);
+    if (f.beamGroup && f.beamGroup._poolMesh) scene.remove(f.beamGroup._poolMesh);
+    if (f.hazerCloud) scene.remove(f.hazerCloud);
+  });
+  fixtures.length = 0;
+  document.getElementById('channel-strip').innerHTML = '';
+  Object.keys(channelData).forEach(k => delete channelData[k]);
+  closeGizmo();
+  deselectFixture();
+  showDrop();
+}
+
+function blackout() {
+  fixtures.forEach(f => {
+    if (f.spotLight) { f.spotLight.intensity = 0; }
+    f.intensity = 0;
+    updateChannel(f);
+  });
+  if (selectedFixture) updatePropertiesPanel(selectedFixture);
+}
+
+function applyScene() {
+  const scene_name = document.getElementById('scene-select').value;
+  const scenes = {
+    'Full Stage White': { color: '#ffffff', intensity: 100 },
+    'Warm Down Stage': { color: '#ffaa44', intensity: 80 },
+    'Cool Side Light': { color: '#4488ff', intensity: 70 },
+    'Dramatic Backlight': { color: '#ff3300', intensity: 60 },
+    'Color Mix': null,
+    'Custom': null,
+  };
+  const preset = scenes[scene_name];
+  if (!preset) return;
+  const colors = ['#ff2200','#ff8800','#ffff00','#00ff88','#0088ff','#ff00ff'];
+  fixtures.forEach((f, i) => {
+    if (!f.spotLight) return;
+    f.intensity = preset.intensity;
+    const col = scene_name === 'Color Mix' ? colors[i % colors.length] : preset.color;
+    f.color = col;
+    const c3 = new THREE.Color(col);
+    f.spotLight.color = c3;
+    f.spotLight.intensity = (f.intensity / 100) * (f.config.intensity || 1) * 2;
+    updateChannel(f);
+    f.group.traverse(child => {
+      if (child.isMesh && child.material.emissive) child.material.emissive = c3;
+    });
+    if (f.beamGroup) {
+      f.beamGroup._coneMat.color = c3;
+      f.beamGroup._coreMat.color = c3;
+      f.beamGroup._poolMat.color = c3;
+    }
+  });
+  if (selectedFixture) updatePropertiesPanel(selectedFixture);
+}
+
+// ======= SNEAK =======
+let sneakState = null; // saved levels while sneaking
+
+function sneakDown() {
+  if (sneakState) return;
+  // Save current live state
+  sneakState = fixtures.map(f => ({
+    id: f.id,
+    intensity: f.intensity,
+    color: f.color,
+    rotX: f.group.rotation.x,
+    rotY: f.group.rotation.y,
+    rotZ: f.group.rotation.z,
+    posX: f.group.position.x,
+    posY: f.group.position.y,
+    posZ: f.group.position.z,
+    tiltAngle: f.tiltAngle,
+    panAngle: f.panAngle,
+    hazeIntensity: f.hazeIntensity || 0,
+  }));
+  document.getElementById('sneak-btn').classList.add('active');
+}
+
+function sneakUp() {
+  if (!sneakState) return;
+  // Restore saved state instantly
+  sneakState.forEach(saved => {
+    const f = fixtures.find(x => x.id === saved.id);
+    if (!f) return;
+    f.intensity = saved.intensity;
+    f.color = saved.color;
+    f.tiltAngle = saved.tiltAngle;
+    f.panAngle = saved.panAngle;
+    f.group.rotation.set(saved.rotX, saved.rotY, saved.rotZ);
+    f.group.position.set(saved.posX, saved.posY, saved.posZ);
+    applyFixtureState(f);
+    updateChannel(f);
+  });
+  sneakState = null;
+  document.getElementById('sneak-btn').classList.remove('active');
+  if (selectedFixture) updatePropertiesPanel(selectedFixture);
+}
+
+// ======= CUE SYSTEM =======
+let cues = [];           
+let activeCueIndex = -1; // which cue is selected/highlighted in the list
+let liveCueIndex = -1;   // which cue is currently live on stage
+let cueFading = false;
+let cueFadeStart = 0;
+let cueFadeFrom = null;
+let cueFadeTo = null;
+let cueFadeDuration = 2.0;
+
+function captureSnapshot() {
+  return fixtures.map(f => ({
+    id: f.id,
+    intensity: f.intensity,
+    color: f.color,
+    rotX: f.group.rotation.x,
+    rotY: f.group.rotation.y,
+    rotZ: f.group.rotation.z,
+    posX: f.group.position.x,
+    posY: f.group.position.y,
+    posZ: f.group.position.z,
+    tiltAngle: f.tiltAngle,
+    panAngle: f.panAngle,
+    hazeIntensity: f.hazeIntensity || 0,
+  }));
+}
+
+function addCue() {
+  // Snapshot the current stage state as a new cue
+  const snap = captureSnapshot();
+  const num = cues.length + 1;
+  const cue = { num, label: `Q${num}`, snapshot: snap };
+  cues.push(cue);
+
+  // New cue becomes both selected and live
+  activeCueIndex = cues.length - 1;
+  liveCueIndex = activeCueIndex;
+  renderCueList();
+  showCueFlash(`Q${num} recorded`);
+}
+
+function deleteCue() {
+  if (activeCueIndex < 0 || activeCueIndex >= cues.length) return;
+  cues.splice(activeCueIndex, 1);
+  // Renumber
+  cues.forEach((c, i) => { c.num = i + 1; c.label = `Q${i + 1}`; });
+  activeCueIndex = Math.min(activeCueIndex, cues.length - 1);
+  if (liveCueIndex >= cues.length) liveCueIndex = cues.length - 1;
+  renderCueList();
+}
+
+function selectCue(idx) {
+  // Clicking a cue just highlights it — doesn't change the stage
+  activeCueIndex = idx;
+  renderCueList();
+}
+
+function cueGo() {
+  // GO: crossfade from current live look → the selected (highlighted) cue
+  // If nothing selected, go to the next cue after live
+  if (cues.length === 0) return;
+  let targetIdx;
+  if (activeCueIndex >= 0 && activeCueIndex !== liveCueIndex) {
+    targetIdx = activeCueIndex;
+  } else {
+    targetIdx = liveCueIndex < 0 ? 0 : (liveCueIndex + 1) % cues.length;
+  }
+  crossfadeToCue(targetIdx);
+}
+
+function cueBack() {
+  if (cues.length === 0) return;
+  const prevIdx = liveCueIndex <= 0 ? cues.length - 1 : liveCueIndex - 1;
+  crossfadeToCue(prevIdx);
+}
+
+function cueNext() {
+  if (cues.length === 0) return;
+  const nextIdx = (liveCueIndex + 1) % cues.length;
+  crossfadeToCue(nextIdx);
+}
+
+function crossfadeToCue(toIdx) {
+  if (cueFading) {
+    applySnapshotInstant(cueFadeTo);
+    cueFading = false;
+  }
+  cueFadeFrom = captureSnapshot();
+  cueFadeTo = cues[toIdx].snapshot;
+  cueFadeDuration = parseFloat(document.getElementById('fade-time-slider').value) || 2.0;
+  cueFadeStart = performance.now();
+  cueFading = true;
+  liveCueIndex = toIdx;
+  activeCueIndex = toIdx;
+  renderCueList();
+
+  const goBtn = document.querySelector('.cue-go');
+  if (goBtn) { goBtn.classList.add('firing'); setTimeout(() => goBtn.classList.remove('firing'), 300); }
+}
+
+function updateGoProgress(t) {
+  const goBtn = document.querySelector('.cue-go');
+  if (!goBtn) return;
+  if (cueFading && t < 1) {
+    goBtn.style.background = `linear-gradient(90deg, rgba(85,255,136,0.35) ${t*100}%, rgba(85,255,136,0.08) ${t*100}%)`;
+    goBtn.textContent = `${Math.round(t * 100)}%`;
+  } else {
+    goBtn.style.background = '';
+    goBtn.textContent = 'GO';
+  }
+}
+
+function showCueFlash(msg) {
+  // Brief flash label on the cue transport
+  const go = document.querySelector('.cue-go');
+  if (!go) return;
+  const orig = go.textContent;
+  go.textContent = msg;
+  setTimeout(() => go.textContent = orig, 800);
+}
+
+function applySnapshotInstant(snap) {
+  if (!snap) return;
+  snap.forEach(saved => {
+    const f = fixtures.find(x => x.id === saved.id);
+    if (!f) return;
+    f.intensity = saved.intensity;
+    f.color = saved.color;
+    f.tiltAngle = saved.tiltAngle;
+    f.panAngle = saved.panAngle;
+    f.group.rotation.set(saved.rotX, saved.rotY, saved.rotZ);
+    f.group.position.set(saved.posX, saved.posY, saved.posZ);
+    applyFixtureState(f);
+    updateChannel(f);
+  });
+  if (selectedFixture) updatePropertiesPanel(selectedFixture);
+}
+
+function tickCueFade() {
+  if (!cueFading) return;
+  const elapsed = (performance.now() - cueFadeStart) / 1000;
+  const t = Math.min(1, cueFadeDuration > 0 ? elapsed / cueFadeDuration : 1);
+  const ease = t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t; // ease in-out quad
+
+  updateGoProgress(t);
+
+  cueFadeFrom.forEach(fromState => {
+    const toState = cueFadeTo.find(x => x.id === fromState.id);
+    if (!toState) return;
+    const f = fixtures.find(x => x.id === fromState.id);
+    if (!f) return;
+
+    // Intensity
+    f.intensity = fromState.intensity + (toState.intensity - fromState.intensity) * ease;
+
+    // Color (hex → RGB lerp)
+    const fc = new THREE.Color(fromState.color);
+    const tc = new THREE.Color(toState.color);
+    const lc = new THREE.Color(
+      fc.r + (tc.r - fc.r) * ease,
+      fc.g + (tc.g - fc.g) * ease,
+      fc.b + (tc.b - fc.b) * ease
+    );
+    f.color = '#' + lc.getHexString();
+
+    // Rotation (pan / tilt)
+    f.group.rotation.x = fromState.rotX + (toState.rotX - fromState.rotX) * ease;
+    f.group.rotation.y = fromState.rotY + (toState.rotY - fromState.rotY) * ease;
+    f.group.rotation.z = fromState.rotZ + (toState.rotZ - fromState.rotZ) * ease;
+    f.panAngle = Math.round(THREE.MathUtils.radToDeg(f.group.rotation.y));
+    f.tiltAngle = Math.round(THREE.MathUtils.radToDeg(f.group.rotation.x - Math.PI));
+
+    // Position
+    f.group.position.x = fromState.posX + (toState.posX - fromState.posX) * ease;
+    f.group.position.y = fromState.posY + (toState.posY - fromState.posY) * ease;
+    f.group.position.z = fromState.posZ + (toState.posZ - fromState.posZ) * ease;
+    if (f.hazerCloud) {
+      f.hazerCloud.position.x = f.group.position.x;
+      f.hazerCloud.position.y = f.group.position.y + 1.0;
+      f.hazerCloud.position.z = f.group.position.z;
+    }
+
+    applyFixtureState(f);
+    updateChannel(f);
+  });
+
+  if (t >= 1) {
+    cueFading = false;
+    if (selectedFixture) updatePropertiesPanel(selectedFixture);
+  }
+}
+
+// Apply f.intensity and f.color to THREE objects
+function applyFixtureState(f) {
+  const c = new THREE.Color(f.color);
+  if (f.spotLight) {
+    f.spotLight.intensity = (f.intensity / 100) * (f.config.intensity || 1) * 2;
+    f.spotLight.color = c;
+  }
+  f.group.traverse(child => {
+    if (child.isMesh && child.material && child.material.emissive) child.material.emissive = c;
+  });
+  if (f.beamGroup) {
+    f.beamGroup._coneMat.color = c;
+    f.beamGroup._coreMat.color = c;
+    f.beamGroup._poolMat.color = c;
+  }
+}
+
+function renderCueList() {
+  const list = document.getElementById('cue-list');
+  list.innerHTML = '';
+  cues.forEach((cue, idx) => {
+    const isActive = idx === activeCueIndex;
+    const isLive   = idx === liveCueIndex;
+
+    // Arrow connector between cues
+    if (idx > 0) {
+      const arrow = document.createElement('div');
+      arrow.className = 'cue-arrow';
+      list.appendChild(arrow);
+    }
+
+    const item = document.createElement('div');
+    item.className = 'cue-item' + (isActive ? ' active' : '') + (isLive ? ' playing' : '');
+    item.title = `Click to select Q${cue.label} — then press GO to crossfade to it`;
+    item.onclick = () => selectCue(idx);
+
+    // Build color swatch from all lit fixture colors in this cue
+    const litStates = cue.snapshot.filter(s => {
+      const f = fixtures.find(x => x.id === s.id);
+      return f && f.config.isLight;
+    });
+    const swatchColors = litStates.slice(0, 4).map(s => s.color);
+    const swatchW = swatchColors.length > 0 ? 100 / swatchColors.length : 100;
+
+    item.innerHTML = `
+      <div class="cue-item-dot">
+        <svg class="cue-dot-swatch" viewBox="0 0 36 36" preserveAspectRatio="none">
+          ${swatchColors.map((col, i) =>
+            `<rect x="${i * swatchW}" y="0" width="${swatchW}" height="36" fill="${col}"/>`
+          ).join('')}
+          ${swatchColors.length === 0 ? '<rect x="0" y="0" width="36" height="36" fill="#1a1a2e"/>' : ''}
+        </svg>
+        ${isLive ? '<div style="position:absolute;bottom:2px;right:2px;width:5px;height:5px;border-radius:50%;background:#55FF88"></div>' : ''}
+        ${isActive && !isLive ? '<div style="position:absolute;top:2px;right:2px;width:5px;height:5px;border-radius:50%;background:#FF6B00"></div>' : ''}
+      </div>
+      <div class="cue-num">${cue.label}</div>
+    `;
+    list.appendChild(item);
+  });
+
+  // Scroll active cue into view
+  if (activeCueIndex >= 0) {
+    const items = list.querySelectorAll('.cue-item');
+    if (items[activeCueIndex]) items[activeCueIndex].scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+  }
+}
+
+function updateFadeLabel(val) {
+  document.getElementById('fade-time-val').textContent = parseFloat(val).toFixed(1) + 's';
+}
+
+// ======= ANIMATE =======
+const clock = new THREE.Clock();
+
+function animate() {
+  requestAnimationFrame(animate);
+  const t = clock.getElapsedTime();
+
+  // Tick cue crossfade
+  tickCueFade();
+
+  // Animate moving lights
+  fixtures.forEach(f => {
+    if (f.type === 'movingyoke' || f.type === 'movingyoke2') {
+      if (f.spotLight) {
+        const sw = Math.sin(t * 0.5 + f.id) * 0.3;
+        f.group.rotation.z = sw;
+      }
+    }
+
+    // Update hazer clouds
+    if (f.hazerCloud) {
+      updateHazerCloud(f.hazerCloud, f.hazerCloud._hazeLevel, t);
+    }
+
+    // Sync beam opacity to intensity and position pool on floor
+    if (f.beamGroup) {
+      const alpha = f.intensity / 100;
+      f.beamGroup._coneMat.opacity = 0.13 * alpha;
+      f.beamGroup._coreMat.opacity = 0.22 * alpha;
+      f.beamGroup.visible = alpha > 0.01;
+
+      const worldPos = new THREE.Vector3();
+      f.group.getWorldPosition(worldPos);
+      const worldDir = new THREE.Vector3(0, -1, 0);
+      worldDir.applyQuaternion(f.group.quaternion);
+      const pool = f.beamGroup._poolMesh;
+      if (worldPos.y > 0 && worldDir.y < 0) {
+        const t_hit = -worldPos.y / worldDir.y;
+        const hitX = worldPos.x + worldDir.x * t_hit;
+        const hitZ = worldPos.z + worldDir.z * t_hit;
+        pool.position.set(hitX, 0.01, hitZ);
+        pool.rotation.x = -Math.PI / 2;
+        pool.visible = alpha > 0.01;
+        f.beamGroup._poolMat.opacity = 0.28 * alpha;
+        const scaleFactor = Math.max(0.5, worldPos.y / 7.5);
+        pool.scale.setScalar(scaleFactor);
+      } else {
+        pool.visible = false;
+      }
+    }
+  });
+
+  // Update selection outline + gizmo position
+  if (selectedFixture && selectionOutline.visible) {
+    selectionOutline.setFromObject(selectedFixture.group);
+    if (gizmoActive) {
+      gizmoGroup.position.copy(selectedFixture.group.position);
+    }
+  }
+
+  renderer.render(scene, camera);
+}
+animate();
+
+// ======= RESIZE =======
+window.addEventListener('resize', () => {
+  W = viewport.clientWidth; H = viewport.clientHeight;
+  renderer.setSize(W, H);
+  camera.aspect = W / H;
+  camera.updateProjectionMatrix();
+});
+
+// Pre-spawn a couple of example fixtures
+setTimeout(() => {
+  spawnFixture('source4', -4, -3.5);
+  spawnFixture('source4', 0, -3.5);
+  spawnFixture('source4', 4, -3.5);
+  spawnFixture('lustr', -6, -4);
+  spawnFixture('lustr', 6, -4);
+  spawnFixture('person', 0, 1);
+  spawnFixture('hazer', 8, 4);
+  deselectFixture();
+}, 200);
+</script>
+</body>
+</html>
